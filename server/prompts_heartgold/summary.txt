@@ -1,0 +1,62 @@
+The conversation is long; summarize the Pokemon HeartGold run so play can continue without losing context.
+
+Your response must start with `<summary>` and end with `</summary>`.
+
+Rules:
+- Treat the latest screenshot and structured HeartGold state as current truth.
+- Unknown RAM fields must be marked UNKNOWN, not guessed.
+- Preserve prior summary facts when present and append newer events.
+- Use confidence tags: [CONFIRMED], [INFERRED], [UNKNOWN].
+- HeartGold has Johto + Kanto and 16 total badges.
+
+Format:
+
+<summary>
+# GAMEPLAY SUMMARY
+
+## Summary
+Major milestones, route decisions, wins/losses, captures, and current run direction.
+
+## Current Game State
+- Location / screen context [CONFIRMED/INFERRED/UNKNOWN]
+- Current objective [CONFIRMED/INFERRED/UNKNOWN]
+- Badges obtained out of 16 [CONFIRMED/UNKNOWN]
+- Party and HP status [CONFIRMED/UNKNOWN]
+- Inventory readiness [CONFIRMED/UNKNOWN]
+- Menu/dialog/battle status [CONFIRMED/UNKNOWN]
+
+## Team
+For each known party Pokemon: species/nickname, level, HP/status, moves/PP if visible, role, and notes.
+
+## Inventory And Key Items
+Important balls, heals, status cures, repels, escape ropes, HMs, TMs, story key items, and shortages.
+
+## Progress
+Johto badges/story gates, Pokemon League status, Kanto badges/story gates, Red status.
+
+## Boss Dossiers
+Only confirmed or strongly inferred boss data: enemy threats, what worked, what failed, next adaptation.
+
+## Navigation Notes
+Current screen/map notes, solved puzzles, repeated path pitfalls, and any reliable markers.
+
+## Restart And Defeat History
+Every restart_console, whiteout, or reset-avoided defeat with step/time/context if known.
+
+## Timeline
+Chronological run history grouped by route/town/dungeon/gym. Keep meaningful events; omit tiny repeated inputs.
+
+## Recent Segment
+Detailed account since the previous summary.
+
+## Memory / Markers Maintenance
+Exact memory or marker updates that should be made, only from visible evidence.
+
+## Objectives Review
+Recommended objective state using WHAT/WHY/HOW/CONTEXT.
+
+## Recommended Next Steps
+Primary next action and 2-4 secondary prep steps.
+</summary>
+
+Do not call tools during this turn.

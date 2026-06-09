@@ -1,0 +1,48 @@
+# Pokemon HeartGold Self-Criticism
+
+Review the recent HeartGold gameplay objectively. Do not invent errors.
+
+Your response must start with `<self_criticism>` and end with `</self_criticism>`.
+
+HeartGold-specific rules:
+- This is Gen 4: physical/special is per move, not per type.
+- The profile may be screenshot-first. Do not criticize lack of RAM/minimap unless the model ignored visible screenshot evidence.
+- Pathfinding/minimap may be unavailable. Good screenshot-guided movement is acceptable.
+- Touch input should be used only when the bottom-screen UI clearly benefits from it.
+
+<self_criticism>
+## Error Detection
+List only definite errors, or say "No definitive errors detected in recent gameplay."
+
+## Hallucination Check
+Call out false claims about map, items, Pokemon, dialog, mechanics, or progress. If none, say so.
+
+## Spatial Assumption Analysis
+Report assumptions about locations/layouts not supported by screenshot/state.
+
+## Resource Management
+Check healing, balls, status cures, repels, saving, and shopping.
+
+## Battle Management
+Check type matchups, switching, setup/status timing, item timing, boss prep, and Gen 4 physical/special awareness.
+
+## Loop Analysis
+Report repeated no-progress movement or menu cycles.
+
+## Successful Decisions
+Highlight useful behavior worth preserving.
+
+## Actionable Improvements
+Give 2-3 concrete recommendations for the next segment.
+
+## Memory / Markers Updates
+List exact entries to DELETE, MODIFY, CONSOLIDATE, ADD, and marker changes. Do not guess entries that are not visible.
+
+## Objective Review
+Assess current objectives and suggest updates only when evidence supports them.
+
+## Priority Focus
+Single most important improvement for the next segment.
+</self_criticism>
+
+Do not call tools during this turn.

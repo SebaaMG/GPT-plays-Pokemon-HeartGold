@@ -1,0 +1,128 @@
+[
+  {
+    "id": "starter_pokemon",
+    "type": "party_count_at_least",
+    "trigger": 1,
+    "label": "Starter Pokemon"
+  },
+  {
+    "id": "get_pokedex",
+    "type": "event",
+    "trigger": "EVENT_GOT_POKEDEX",
+    "label": "Get Pokedex"
+  },
+  {
+    "id": "zephyr_badge",
+    "type": "badge",
+    "trigger": "ZEPHYR",
+    "label": "Zephyr Badge"
+  },
+  {
+    "id": "hive_badge",
+    "type": "badge",
+    "trigger": "HIVE",
+    "label": "Hive Badge"
+  },
+  {
+    "id": "plain_badge",
+    "type": "badge",
+    "trigger": "PLAIN",
+    "label": "Plain Badge"
+  },
+  {
+    "id": "fog_badge",
+    "type": "badge",
+    "trigger": "FOG",
+    "label": "Fog Badge"
+  },
+  {
+    "id": "storm_badge",
+    "type": "badge",
+    "trigger": "STORM",
+    "label": "Storm Badge"
+  },
+  {
+    "id": "mineral_badge",
+    "type": "badge",
+    "trigger": "MINERAL",
+    "label": "Mineral Badge"
+  },
+  {
+    "id": "glacier_badge",
+    "type": "badge",
+    "trigger": "GLACIER",
+    "label": "Glacier Badge"
+  },
+  {
+    "id": "rising_badge",
+    "type": "badge",
+    "trigger": "RISING",
+    "label": "Rising Badge"
+  },
+  {
+    "id": "elite_four",
+    "type": "event",
+    "trigger": "EVENT_BEAT_ELITE_FOUR",
+    "label": "Elite Four"
+  },
+  {
+    "id": "champion",
+    "type": "event",
+    "trigger": "EVENT_BEAT_CHAMPION_LANCE",
+    "label": "Champion"
+  },
+  {
+    "id": "boulder_badge",
+    "type": "badge",
+    "trigger": "BOULDER",
+    "label": "Boulder Badge"
+  },
+  {
+    "id": "cascade_badge",
+    "type": "badge",
+    "trigger": "CASCADE",
+    "label": "Cascade Badge"
+  },
+  {
+    "id": "thunder_badge",
+    "type": "badge",
+    "trigger": "THUNDER",
+    "label": "Thunder Badge"
+  },
+  {
+    "id": "rainbow_badge",
+    "type": "badge",
+    "trigger": "RAINBOW",
+    "label": "Rainbow Badge"
+  },
+  {
+    "id": "soul_badge",
+    "type": "badge",
+    "trigger": "SOUL",
+    "label": "Soul Badge"
+  },
+  {
+    "id": "marsh_badge",
+    "type": "badge",
+    "trigger": "MARSH",
+    "label": "Marsh Badge"
+  },
+  {
+    "id": "volcano_badge",
+    "type": "badge",
+    "trigger": "VOLCANO",
+    "label": "Volcano Badge"
+  },
+  {
+    "id": "earth_badge",
+    "type": "badge",
+    "trigger": "EARTH",
+    "label": "Earth Badge"
+  },
+  {
+    "id": "red",
+    "type": "event",
+    "trigger": "EVENT_BEAT_RED",
+    "label": "Red"
+  }
+]

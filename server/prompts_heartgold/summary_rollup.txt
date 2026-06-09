@@ -1,0 +1,9 @@
+You are given chronological Pokemon HeartGold summaries from oldest to newest.
+
+Use the last summary as the base. Enrich its historical timeline with important facts from older summaries that are missing. Do not change the latest current state, current objectives, or recommended next steps.
+
+Rules:
+- Output only one `<summary>...</summary>` block.
+- Do not invent facts.
+- Prefer older summaries for historical facts if there is a conflict.
+- HeartGold full benchmark progress includes Johto, Kanto, and Red.

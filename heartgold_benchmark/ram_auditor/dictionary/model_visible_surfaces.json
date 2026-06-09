@@ -1,0 +1,617 @@
+{
+  "schema": "heartgold_ram_surface_dictionary_v2",
+  "purpose": "Runtime policy for the HeartGold ram_assisted model-visible observation surface.",
+  "decoding_policy": {
+    "observation_rule": "Expose the current DS screenshot plus decoded current RAM gameplay state through the agent observation endpoint.",
+    "monitor_boundary_rule": "Runtime dumps, raw pointers, raw flags, route plans, and future-state helpers stay outside gameplay observations."
+  },
+  "required_model_visible_surfaces": [
+    "image",
+    "user_input_text",
+    "screen_phase",
+    "position",
+    "facing",
+    "movement_mode",
+    "field_move_affordances",
+    "visibility",
+    "collision_grid",
+    "runtime_objects",
+    "visible_interactables",
+    "visible_warps",
+    "current_connections",
+    "party",
+    "inventory",
+    "pc_storage",
+    "money",
+    "badges",
+    "progress",
+    "battle",
+    "current_visible_text",
+    "recent_visible_text",
+    "menu",
+    "naming"
+  ],
+  "required_monitor_surfaces": [
+    "action_trace"
+  ],
+  "aliases": {
+    "pcStorage": "pc_storage",
+    "npcs": "runtime_objects",
+    "interactables": "visible_interactables",
+    "warps": "visible_warps",
+    "currentConnections": "current_connections",
+    "dialogue": "current_visible_text",
+    "field_dialogue_text": "current_visible_text",
+    "battle_text": "current_visible_text",
+    "current_ui": "current_visible_text",
+    "strength": "progress",
+    "flash": "visibility",
+    "map_visibility": "visibility",
+    "movement": "movement_mode",
+    "fieldMoveAffordances": "field_move_affordances",
+    "field_moves": "field_move_affordances"
+  },
+  "global_forbidden_player_visible_keys": [
+    "raw",
+    "rawMemory",
+    "raw_memory",
+    "rawState",
+    "raw_state",
+    "address",
+    "pointer",
+    "script_id",
+    "scriptId",
+    "event_flag",
+    "eventFlag",
+    "event_flags",
+    "eventFlags",
+    "route_plan",
+    "routePlan",
+    "future_state",
+    "futureState"
+  ],
+  "global_forbidden_markers": [
+    "oracle",
+    "monitor_only",
+    "harness_diagnostics",
+    "raw_address",
+    "address_candidate",
+    "mock_only",
+    "tasvideos"
+  ],
+  "global_forbidden_player_visible_patterns": [
+    {
+      "pattern": "\\b(?:oracle|monitor_only|harness_diagnostics|raw[-_ ]?address|address[-_ ]?candidate|mock[-_ ]?only|tasvideos)\\b",
+      "flags": "i",
+      "reason": "monitor_only_marker"
+    }
+  ],
+  "global_forbidden_model_visible_value_patterns": [
+    {
+      "pattern": "\\b(?:oracle|monitor_only|harness_diagnostics|raw[-_ ]?address|address[-_ ]?candidate|script[-_ ]?id|event[-_ ]?flag)\\b",
+      "flags": "i",
+      "reason": "monitor_only_value_marker"
+    }
+  ],
+  "surfaces": {
+    "image": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "heartgold_model_image_current_ds_screenshot_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "screenshot_hash_present",
+        "model_image_hash_present",
+        "freshness_present"
+      ],
+      "forbidden_sources": [
+        "mock_only",
+        "monitor_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "user_input_text": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "codex_desktop_compact_player_observation_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "sanitized_player_prompt_surface"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "raw_runtime"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "position": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_fieldsystem_location_localmapobject_position_current_v1",
+        "ram_fieldsystem_location_current_map_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_map_identity_verified"
+      ],
+      "forbidden_sources": [
+        "generic_fallback",
+        "high_confidence_candidate",
+        "mock_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "facing": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_localmapobject_current_facing_verified"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_player_localmapobject_bound",
+        "facing_cardinal_direction_valid"
+      ],
+      "forbidden_sources": [
+        "generic_fallback",
+        "mock_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "movement_mode": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_localmapobject_movement_mode_current_v1",
+        "ram_localmapobject_movement_mode_and_vehicle_current_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_player_localmapobject_bound",
+        "movement_mode_decoded",
+        "vehicle_state_decoded"
+      ],
+      "forbidden_sources": [
+        "generic_fallback",
+        "mock_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "screen_phase": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "heartgold_screen_phase_compact_current_surface_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_screen_phase_from_validated_surface_or_screenshot"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "visibility": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_local_field_data_current_weather_visibility_v1",
+        "ram_local_field_data_current_weather_and_flash_flag_validated"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "local_field_data_header_valid",
+        "current_weather_decoded",
+        "flash_or_defog_flag_named_fact_when_field_effect_status_visible"
+      ],
+      "forbidden_sources": [
+        "mock_only",
+        "monitor_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "collision_grid": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "rom_derived_matrix_land_data_with_live_position_validation"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_map_verified",
+        "live_position_validated",
+        "metatile_behavior_decoded_for_known_surface_codes"
+      ],
+      "forbidden_sources": [
+        "mock_only",
+        "future_route_graph"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "runtime_objects": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "fieldsystem_mapobjectmanager_root_bound_visible_runtime_objects_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_map_object_manager_bound",
+        "manager_fieldsystem_backref_bound",
+        "player_avatar_object_backref_bound",
+        "player_object_stride_membership_valid",
+        "visible_subset_current_map"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_address_guess"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "visible_interactables": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "rom_derived_visible_current_map_bg_events_no_raw_scripts"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_map_verified",
+        "bg_event_visible_in_current_view",
+        "hidden_item_bg_events_filtered"
+      ],
+      "forbidden_sources": [
+        "future_route_graph",
+        "script_event_oracle",
+        "raw_address_guess"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "visible_warps": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "rom_derived_static_warp_events_current_map"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_map_verified",
+        "visible_warp_current_view"
+      ],
+      "forbidden_sources": [
+        "future_route_graph",
+        "destination_oracle"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "current_connections": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "rom_derived_current_matrix_adjacency_current_position"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_matrix_cell_verified",
+        "current_position_verified"
+      ],
+      "forbidden_sources": [
+        "future_route_graph",
+        "destination_oracle"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "inventory": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_save_bag_slots_header_validated_with_pocket_bounds_and_itemdata_field_pocket_legality"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "bag_save_header_valid",
+        "pocket_bounds_valid",
+        "item_ids_named"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "party": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_save_party_header_validated_with_pokemon_checksum_and_stats"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "party_count_bounds_valid",
+        "pokemon_checksum_valid",
+        "decrypted_stats_consistent"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "pc_storage": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_pc_storage_current_box_checksums_validated"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_box_valid",
+        "box_checksums_valid",
+        "boxed_pokemon_checksums_valid"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_address_guess",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "money": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_player_profile_money_bounds_validated"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "player_profile_crc_valid",
+        "money_bounds_valid"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_address_candidate",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "badges": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_player_profile_johto_kanto_badge_flags"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "player_profile_crc_valid",
+        "named_badge_flags_only"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_flag_dump",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "progress": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_save_vars_flags_named_current_progress_no_raw_flags"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "save_vars_header_valid",
+        "named_current_progress_only",
+        "strength_field_effect_named_fact",
+        "local_field_data_safari_counters_valid_when_present"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "raw_flag_dump",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "battle": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_battle_context_active_battlers_validated",
+        "ram_battle_context_active_battlers_and_input_validated"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "battle_context_active",
+        "active_battlers_validated",
+        "enemy_backline_unavailable",
+        "battle_input_current_context_backref_validated",
+        "battle_ui_selection_semantic"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "mock_only",
+        "tasvideos_fallback",
+        "raw_address_candidate",
+        "high_confidence_candidate"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "current_visible_text": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "current_visible_text_v1"
+      ],
+      "allowed_decoder_contracts": [
+        "owner_bound_script_environment_textprinter_current_visible_v1",
+        "owner_bound_current_ui_state_visible_text_v1",
+        "owner_bound_battle_msgbuffer_textprinter_current_v1"
+      ],
+      "required_evidence": [
+        "visible_now",
+        "current_screenshot_bound",
+        "owner_bound_text_source"
+      ],
+      "forbidden_sources": [
+        "ocr_only",
+        "future_text_bank",
+        "monitor_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "recent_visible_text": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "current_visible_text_v1_recent_observed"
+      ],
+      "allowed_decoder_contracts": [
+        "owner_bound_script_environment_textprinter_current_visible_v1",
+        "owner_bound_current_ui_state_visible_text_v1",
+        "owner_bound_battle_msgbuffer_textprinter_current_v1",
+        "validated_battle_system_msgbuffer_event_v1"
+      ],
+      "required_evidence": [
+        "recent_screenshot_bound",
+        "owner_bound_text_source"
+      ],
+      "forbidden_sources": [
+        "future_text_bank",
+        "monitor_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "menu": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "ram_script_environment_list_menu_2d_current",
+        "ram_start_menu_taskdata_current_visible_options_v1",
+        "ram_start_menu_fieldsystem_panel_current_visible_options_v1",
+        "ram_bag_overlay_manager_args_bagview_cursor_current_items_v1",
+        "ram_party_menu_overlay_args_party_cursor_current_slots_v1",
+        "ram_party_menu_overlay_args_battle_item_target_current_slots_v1",
+        "ram_party_menu_context_menu_current_options_v1",
+        "ram_pokemon_summary_overlay_args_current_mon_v1",
+        "ram_party_menu_summary_panel_current_mon_v1",
+        "ram_pokegear_flymap_overlay_args_cursor_current_destination_v1",
+        "ram_pcbox_overlay_args_storage_cursor_current_box_v1",
+        "ram_pokedex_overlay_args_current_list_cursor_v1",
+        "ram_touch_save_yes_no_prompt_current_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_menu_owner_bound",
+        "cursor_current"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "future_options"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "naming": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "hgss_naming_appdata_entry_buffer_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_naming_app_bound",
+        "entry_buffer_current"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "raw_address_guess"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "action_trace": {
+      "model_visible": false,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "codex_desktop_action_semantic_closure_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "pre_action_hash",
+        "post_action_hash",
+        "semantic_result_recorded"
+      ],
+      "forbidden_sources": [
+        "shorthand_normalization",
+        "mock_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "field_move_affordances": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "rom_derived_current_facing_field_move_affordances_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_position_verified",
+        "current_facing_verified",
+        "current_facing_tile_from_rom_land_data_or_current_facing_object_from_mapobjectmanager",
+        "field_move_or_obstacle_metatile_or_object_predicate_decoded"
+      ],
+      "forbidden_sources": [
+        "future_route_graph",
+        "script_event_oracle",
+        "raw_address_guess",
+        "mock_only"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    }
+  }
+}
