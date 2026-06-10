@@ -184,17 +184,25 @@ function auditManifestEntry(entry) {
     failures.push({ reason: "manifest_entry_not_object" });
   } else {
     const field = canonicalSurfaceName(entry.field || entry.surface);
+    const visible = entry.visible === true;
     const policy = surfacePolicy(field);
     if (!field || !policy) {
-      failures.push({ field, reason: "surface_policy_missing" });
+      if (visible) failures.push({ field, reason: "surface_policy_missing" });
+      return {
+        schema: "heartgold_manifest_entry_audit_v2",
+        result: failures.length === 0 ? "pass" : "fail",
+        failures,
+      };
     }
     const contract = String(entry.contract || "");
     const allowed = allowedContractsForField(field);
-    if (contract && allowed.size > 0 && !allowed.has(contract)) {
+    if (visible && contract && allowed.size > 0 && !allowed.has(contract)) {
       failures.push({ field, reason: "contract_not_allowed", contract });
     }
-    for (const failure of auditValue(entry.value, [field || "manifest_value"])) {
-      failures.push({ field, ...failure });
+    if (visible) {
+      for (const failure of auditValue(entry.value, [field || "manifest_value"])) {
+        failures.push({ field, ...failure });
+      }
     }
   }
   return {

@@ -8,6 +8,7 @@
   "required_model_visible_surfaces": [
     "image",
     "user_input_text",
+    "decoded_ram",
     "screen_phase",
     "position",
     "facing",
@@ -126,6 +127,25 @@
       "forbidden_sources": [
         "monitor_only",
         "raw_runtime"
+      ],
+      "forbidden_keys": [],
+      "forbidden_value_patterns": []
+    },
+    "decoded_ram": {
+      "model_visible": true,
+      "monitor_only": false,
+      "allowed_contracts": [
+        "decoded_current_ram_gameplay_state_v1"
+      ],
+      "allowed_decoder_contracts": [],
+      "required_evidence": [
+        "current_observation_only",
+        "forbidden_oracle_values_checked"
+      ],
+      "forbidden_sources": [
+        "monitor_only",
+        "raw_runtime",
+        "mock_only"
       ],
       "forbidden_keys": [],
       "forbidden_value_patterns": []

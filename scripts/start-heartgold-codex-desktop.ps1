@@ -3,7 +3,7 @@ param(
   [int]$NodePort = 9885,
   [int]$FrontendPort = 5173,
   [int]$SpeedMode = 100,
-  [string]$Model = "gpt-5.5",
+  [string]$Model = "",
   [string]$ReasoningEffort = "xhigh",
   [string]$RuntimeDir = "",
   [string]$DataDir = "",
@@ -30,10 +30,10 @@ $startArgs = @{
   NodePort = $NodePort
   FrontendPort = $FrontendPort
   SpeedMode = $SpeedMode
-  Model = $Model
   ModelImageScale = $ModelImageScale
   AgentProvider = "codex-desktop"
 }
+if ($Model) { $startArgs.Model = $Model }
 if ($RuntimeDir) { $startArgs.RuntimeDir = $RuntimeDir }
 if ($DataDir) { $startArgs.DataDir = $DataDir }
 if ($NoBootstrap) { $startArgs.NoBootstrap = $true }

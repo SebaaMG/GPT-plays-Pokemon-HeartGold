@@ -419,6 +419,14 @@ function startGameLoopInBackground() {
 
 async function start() {
   console.log(`Starting Pokemon agent server (profile: ${config.gameProfile})...`);
+  if (config.isHeartGold && config.isCodexLocalProvider) {
+    const configuredModel = config.agentProvider === "codex-desktop" ? config.codexDesktop.model : config.codexCli.model;
+    if (!configuredModel) {
+      throw new Error(
+        `HeartGold ${config.agentProvider} requires an explicit model. Pass -Model <model> to the start script or set CODEX_DESKTOP_MODEL, CODEX_MODEL, or OPENAI_MODEL.`
+      );
+    }
+  }
   await loadPersistentState();
   state.lastTotalTokens = 0;
 

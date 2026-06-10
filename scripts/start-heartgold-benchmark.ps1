@@ -31,6 +31,31 @@ $ExpectedDataDir = if ($DataDir) { $DataDir } else { "gpt_data_heartgold" }
 
 New-Item -ItemType Directory -Force -Path $Runtime, $Logs | Out-Null
 
+function First-NonEmptyString {
+  param([object[]]$Values)
+  foreach ($value in $Values) {
+    $text = [string]$value
+    if (-not [string]::IsNullOrWhiteSpace($text)) { return $text.Trim() }
+  }
+  return ""
+}
+
+function Resolve-AgentModel {
+  if ($AgentProvider -eq "codex-desktop") {
+    return First-NonEmptyString @($Model, $env:CODEX_DESKTOP_MODEL, $env:CODEX_MODEL, $env:OPENAI_MODEL)
+  }
+  if ($AgentProvider -eq "codex-cli") {
+    return First-NonEmptyString @($Model, $env:CODEX_MODEL, $env:CODEX_DESKTOP_MODEL, $env:OPENAI_MODEL)
+  }
+  return First-NonEmptyString @($Model, $env:OPENAI_MODEL)
+}
+
+$ResolvedModel = Resolve-AgentModel
+if (($AgentProvider -eq "codex-desktop" -or $AgentProvider -eq "codex-cli") -and -not $ResolvedModel) {
+  throw "HeartGold $AgentProvider requires an explicit model. Pass -Model <model> or set CODEX_DESKTOP_MODEL, CODEX_MODEL, or OPENAI_MODEL."
+}
+if ($ResolvedModel) { $Model = $ResolvedModel }
+
 function Stop-PidFile {
   param([string]$Path)
   if (-not (Test-Path $Path)) { return }
@@ -76,6 +101,44 @@ function Test-PortListening {
   param([int]$Port)
   $listeners = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
   return $listeners.Count -gt 0
+}
+
+function Test-CommandLineContainsAny {
+  param([string]$CommandLine, [string[]]$Patterns)
+  foreach ($pattern in $Patterns) {
+    if ($CommandLine.IndexOf($pattern, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      return $true
+    }
+  }
+  return $false
+}
+
+function Stop-HeartGoldPortListeners {
+  param([int]$Port, [string[]]$CommandLinePatterns)
+  $listeners = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+  $pids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)
+  foreach ($pidValue in $pids) {
+    if (-not $pidValue) { continue }
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $pidValue" -ErrorAction SilentlyContinue
+    $commandLine = if ($process -and $process.CommandLine) { [string]$process.CommandLine } else { "" }
+    if (Test-CommandLineContainsAny -CommandLine $commandLine -Patterns $CommandLinePatterns) {
+      Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+function Assert-PortFree {
+  param([int]$Port, [string]$Label)
+  $listeners = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
+  if ($listeners.Count -eq 0) { return }
+
+  $descriptions = @()
+  foreach ($listener in $listeners) {
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    $commandLine = if ($process -and $process.CommandLine) { [string]$process.CommandLine } else { "<unknown command line>" }
+    $descriptions += "pid $($listener.OwningProcess): $commandLine"
+  }
+  throw "$Label port $Port is already in use after cleanup: $($descriptions -join '; ')"
 }
 
 function Resolve-FreePort {
@@ -166,6 +229,10 @@ function Test-ExistingHeartGoldStack {
   if ($nodeHealth.agentProvider -ne $AgentProvider) { return $false }
   if ($nodeHealth.pythonBaseUrl -ne $BridgeUrl) { return $false }
   if ($nodeHealth.dataDir -ne $ExpectedDataDir) { return $false }
+  if ($Model -and ([string]$nodeHealth.model) -ne $Model) {
+    Write-Warning "A HeartGold stack is already running on the requested ports with model '$($nodeHealth.model)', not '$Model'. Start was not reused."
+    return $false
+  }
 
   $bridgeHealth = Get-JsonOrNull "$BridgeUrl/health"
   if ($null -eq $bridgeHealth -or $bridgeHealth.ok -ne $true) { return $false }
@@ -261,6 +328,10 @@ Stop-PidFile (Join-Path $Runtime "bridge_pid.txt")
 if (-not $KeepExistingEmulators) {
   Stop-PidFile (Join-Path $Runtime "emuhawk_pid.txt")
 }
+Stop-HeartGoldPortListeners -Port $NodePort -CommandLinePatterns @("server\index.js", "server/index.js")
+Stop-HeartGoldPortListeners -Port $BridgePort -CommandLinePatterns @("heartgold_benchmark\heartgold_bridge.py", "heartgold_benchmark/heartgold_bridge.py")
+Assert-PortFree -Port $NodePort -Label "Node API"
+Assert-PortFree -Port $BridgePort -Label "Python bridge"
 
 $BizHawkExe = $env:BIZHAWK_EXE
 if (-not $BizHawkExe) {
@@ -332,15 +403,17 @@ if (-not $NoBootstrap) {
   Wait-BridgeSnapshot "$BridgeUrl/requestData" 90 | Out-Null
 }
 
-if (-not $Model) {
-  $Model = if ($env:CODEX_MODEL) { $env:CODEX_MODEL } else { "gpt-5.5" }
-}
-
 $env:GAME_PROFILE = "heartgold"
 $env:GPT_DATA_DIR = if ($DataDir) { $DataDir } else { "gpt_data_heartgold" }
 $env:AGENT_PROVIDER = $AgentProvider
-$env:CODEX_MODEL = $Model
-$env:CODEX_DESKTOP_MODEL = $Model
+if ($Model) {
+  if ($AgentProvider -eq "openai") {
+    $env:OPENAI_MODEL = $Model
+  } else {
+    $env:CODEX_MODEL = $Model
+    if ($AgentProvider -eq "codex-desktop") { $env:CODEX_DESKTOP_MODEL = $Model }
+  }
+}
 $env:CODEX_REASONING_EFFORT = if ($env:CODEX_REASONING_EFFORT) { $env:CODEX_REASONING_EFFORT } else { "xhigh" }
 $env:CODEX_DESKTOP_REASONING_EFFORT = if ($env:CODEX_DESKTOP_REASONING_EFFORT) { $env:CODEX_DESKTOP_REASONING_EFFORT } else { $env:CODEX_REASONING_EFFORT }
 $env:PYTHON_BASE_URL = $BridgeUrl
@@ -364,6 +437,13 @@ $node = Start-Process -FilePath "node" `
   -PassThru
 Set-ProcessPrioritySafe -Process $node -Priority BelowNormal -ProcessorAffinity $HelperAffinityMask
 $node.Id | Set-Content -LiteralPath (Join-Path $Runtime "node_pid.txt")
+$nodeHealth = Wait-HttpOk "$NodeUrl/health" 30
+if ($nodeHealth.gameProfile -ne "heartgold") { throw "Node server health reported unexpected game profile '$($nodeHealth.gameProfile)'." }
+if ($nodeHealth.agentProvider -ne $AgentProvider) { throw "Node server health reported unexpected provider '$($nodeHealth.agentProvider)'." }
+if ($nodeHealth.pythonBaseUrl -ne $BridgeUrl) { throw "Node server health reported unexpected bridge URL '$($nodeHealth.pythonBaseUrl)'." }
+if ($Model -and ([string]$nodeHealth.model) -ne $Model) {
+  throw "Node server health reported model '$($nodeHealth.model)', expected '$Model'."
+}
 
 if (-not $NoDashboard) {
   $NodeDashboardUrl = "http://127.0.0.1:$NodePort/"

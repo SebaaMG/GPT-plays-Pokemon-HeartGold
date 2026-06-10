@@ -1,6 +1,6 @@
 # GPT Plays Pokémon HeartGold
 
-[![Release: v0.2.1](https://img.shields.io/badge/release-v0.2.1-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.1)
+[![Release: v0.2.2](https://img.shields.io/badge/release-v0.2.2-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.2)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20BizHawk-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -44,7 +44,7 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop | Main local model/operator path for this release. |
+| Codex Desktop | Main local model/operator path for this release. Choose an available Codex model explicitly. |
 
 ## Quick Start
 
@@ -64,10 +64,16 @@ $env:BIZHAWK_EXE = 'C:\path\to\EmuHawk.exe'
 $env:HEARTGOLD_ROM = 'C:\path\to\PokémonHeartGold(USA).nds'
 ```
 
-Start the HeartGold harness:
+Start the HeartGold harness with an explicit Codex model:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1
+powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -Model <your-model> -ReasoningEffort xhigh
+```
+
+For example, if it is available in your account:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -Model gpt-5.4-mini -ReasoningEffort xhigh
 ```
 
 The script starts the Python bridge, launches BizHawk, loads the Lua bridge, starts the Node server, and serves the dashboard.
@@ -94,11 +100,15 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 | `POST http://127.0.0.1:9885/codexDesktop/action` | Submit the next action |
 | `http://127.0.0.1:5173` | Dashboard when enabled |
 
+## Model Selection
+
+Codex Desktop and Codex CLI runs require an explicit model. Pass `-Model <your-model>` to the start scripts, or set `CODEX_DESKTOP_MODEL`, `CODEX_MODEL`, or `OPENAI_MODEL` in your local environment. The project does not include a baked-in Codex model default.
+
 ## What The Agent Sees
 
-The agent plays from `GET /codexDesktop/observation`. That response contains the current screenshot and a decoded snapshot of the current game state from emulator RAM.
+The agent plays from `GET /codexDesktop/observation`. That response contains the current screenshot and the current emulator RAM translated into readable gameplay fields by default.
 
-The intended play surface is the running game: screen pixels plus the current emulator state decoded into readable fields.
+The intended play surface is the running game: screen pixels plus translated current emulator state. Raw bytes, pointers, logs, runtime files, and monitor-only artifacts are not gameplay input.
 
 ## Dashboard
 

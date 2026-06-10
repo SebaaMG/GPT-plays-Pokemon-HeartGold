@@ -1,9 +1,16 @@
 param(
-  [string]$Model = "gpt-5.5",
+  [string]$Model = "",
   [string]$ReasoningEffort = "xhigh"
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $Model) {
+  $Model = if ($env:CODEX_MODEL) { $env:CODEX_MODEL } elseif ($env:CODEX_DESKTOP_MODEL) { $env:CODEX_DESKTOP_MODEL } elseif ($env:OPENAI_MODEL) { $env:OPENAI_MODEL } else { "" }
+}
+if (-not $Model) {
+  throw "Codex CLI provider smoke test requires an explicit model. Pass -Model <model> or set CODEX_MODEL, CODEX_DESKTOP_MODEL, or OPENAI_MODEL."
+}
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Runtime = Join-Path $Root ".heartgold_runtime"

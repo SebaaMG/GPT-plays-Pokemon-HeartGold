@@ -8,8 +8,7 @@ const DEFAULT_PYTHON_BASE_URL = IS_HEARTGOLD ? "http://127.0.0.1:8010" : "http:/
 const DEFAULT_DATA_DIR = IS_HEARTGOLD ? "gpt_data_heartgold" : "gpt_data";
 const DEFAULT_PROMPTS_DIR = IS_HEARTGOLD ? "prompts_heartgold" : "prompts";
 const DEFAULT_GAME_PROMPT_FILE = path.join(ROOT_DIR, DEFAULT_PROMPTS_DIR, "game.txt");
-const DEFAULT_MODEL = IS_HEARTGOLD ? "gpt-5.5" : "gpt-5.2";
-const DEFAULT_CODEX_CLI_MODEL = IS_HEARTGOLD ? "gpt-5.5" : DEFAULT_MODEL;
+const DEFAULT_OPENAI_MODEL = "gpt-5.2";
 const DEFAULT_REASONING_EFFORT = IS_HEARTGOLD ? "xhigh" : "high";
 const AGENT_PROVIDER = String(process.env.AGENT_PROVIDER || (IS_HEARTGOLD ? "codex-desktop" : "openai")).toLowerCase();
 const IS_CODEX_LOCAL_PROVIDER = AGENT_PROVIDER === "codex-cli" || AGENT_PROVIDER === "codex-desktop";
@@ -29,6 +28,15 @@ const HEARTGOLD_OBSERVATION_MODE = OBSERVATION_MODES.has(HEARTGOLD_OBSERVATION_M
   : "ram_assisted";
 const envFlagDisabled = (value) => ["0", "false", "no", "off"].includes(String(value || "").trim().toLowerCase());
 const envFlagEnabled = (value) => ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+const envText = (...values) => {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+};
+const CODEX_CLI_MODEL = envText(process.env.CODEX_MODEL, process.env.CODEX_DESKTOP_MODEL, process.env.OPENAI_MODEL);
+const CODEX_DESKTOP_MODEL = envText(process.env.CODEX_DESKTOP_MODEL, process.env.CODEX_MODEL, process.env.OPENAI_MODEL);
 
 const config = {
   gameProfile: GAME_PROFILE,
@@ -43,7 +51,7 @@ const config = {
   // --- OpenAI Configuration ---
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
+    model: envText(process.env.OPENAI_MODEL) || DEFAULT_OPENAI_MODEL,
     reasoningEffort: process.env.OPENAI_REASONING_EFFORT || DEFAULT_REASONING_EFFORT,
     reasoningEffortBattle: process.env.OPENAI_REASONING_EFFORT_BATTLE || DEFAULT_REASONING_EFFORT,
     reasoningEffortDialog: process.env.OPENAI_REASONING_EFFORT_DIALOG || DEFAULT_REASONING_EFFORT,
@@ -62,7 +70,6 @@ const config = {
     service_tierPathfinding: process.env.OPENAI_SERVICE_TIER_PATHFINDING || "priority",
 
     tokenPrice: {
-      "gpt-5.5": { input: 0, cached_input: 0, output: 0 },
       "gpt-5.2": { input: 1.75, cached_input: 0.175, output: 14 },
       "gpt-5.1": { input: 1.25, cached_input: 0.125, output: 10 },
       "gpt-5": { input: 1.25, cached_input: 0.125, output: 10 },
@@ -102,7 +109,7 @@ const config = {
   // AGENT_PROVIDER=codex-cli to route main gameplay decisions through it.
   codexCli: {
     command: process.env.CODEX_CLI_COMMAND || "codex",
-    model: process.env.CODEX_MODEL || process.env.OPENAI_MODEL || DEFAULT_CODEX_CLI_MODEL,
+    model: CODEX_CLI_MODEL,
     reasoningEffort: process.env.CODEX_REASONING_EFFORT || process.env.OPENAI_REASONING_EFFORT || DEFAULT_REASONING_EFFORT,
     timeout: Number(process.env.CODEX_TIMEOUT_MS || 15 * 60 * 1000),
     get outputDir() {
@@ -115,7 +122,7 @@ const config = {
   // accepts an execute_action JSON response from the current Codex Desktop
   // conversation.
   codexDesktop: {
-    model: process.env.CODEX_DESKTOP_MODEL || process.env.CODEX_MODEL || DEFAULT_CODEX_CLI_MODEL,
+    model: CODEX_DESKTOP_MODEL,
     reasoningEffort:
       process.env.CODEX_DESKTOP_REASONING_EFFORT ||
       process.env.CODEX_REASONING_EFFORT ||
