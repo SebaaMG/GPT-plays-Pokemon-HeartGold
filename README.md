@@ -1,6 +1,6 @@
 # GPT Plays Pokémon HeartGold
 
-[![Release: v0.2.0](https://img.shields.io/badge/release-v0.2.0-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.0)
+[![Release: v0.2.1](https://img.shields.io/badge/release-v0.2.1-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.1)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20BizHawk-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
