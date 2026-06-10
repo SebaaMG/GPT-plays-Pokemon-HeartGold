@@ -86,8 +86,13 @@ try {
 
   if ($StartStack) {
     Try-Step "Start no-agent stack" {
-      $startArgs = @("-BridgePort", $BridgePort, "-NodePort", $NodePort, "-FrontendPort", $FrontendPort, "-NoAgent")
-      if ($NoBootstrap) { $startArgs += "-NoBootstrap" }
+      $startArgs = @{
+        BridgePort = $BridgePort
+        NodePort = $NodePort
+        FrontendPort = $FrontendPort
+        NoAgent = $true
+      }
+      if ($NoBootstrap) { $startArgs.NoBootstrap = $true }
       & (Join-Path $PSScriptRoot "start-heartgold-benchmark.ps1") @startArgs
       Resolve-FrontendFromRuntime
       "started"
@@ -155,8 +160,8 @@ try {
   Pop-Location
 }
 
-$passed = ($results | Where-Object { $_.ok }).Count
-$failed = ($results | Where-Object { -not $_.ok }).Count
+$passed = @($results | Where-Object { $_.ok }).Count
+$failed = @($results | Where-Object { -not $_.ok }).Count
 $status = if ($failed -eq 0) { "PASS" } else { "PARTIAL" }
 $timestamp = Get-Date -Format o
 $lines = @(

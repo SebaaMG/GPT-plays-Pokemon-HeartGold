@@ -140,6 +140,44 @@ function auditPlayerVisiblePayload(payload) {
   };
 }
 
+function applyManifestEntryGate(entry) {
+  if (!isPlainObject(entry)) return entry;
+
+  const field = canonicalSurfaceName(entry.field || entry.surface);
+  const out = { ...entry, field };
+  const hide = (reason) => ({
+    ...out,
+    visible: false,
+    value: null,
+    value_hash: null,
+    unavailable_reason: out.unavailable_reason || reason,
+  });
+
+  const policy = surfacePolicy(field);
+  if (!field || !policy) return hide("surface_policy_missing");
+  if (policy.monitor_only === true || policy.model_visible === false) {
+    return hide("surface_not_model_visible");
+  }
+
+  const contract = String(out.contract || "");
+  const allowedContracts = allowedContractsForField(field);
+  if (out.visible === true && contract && allowedContracts.size > 0 && !allowedContracts.has(contract)) {
+    return hide("contract_not_allowed");
+  }
+
+  const source = lower(out.source);
+  const forbiddenSources = stringList(policy.forbidden_sources).map(lower);
+  if (out.visible === true && source && forbiddenSources.some((forbidden) => source.includes(forbidden))) {
+    return hide("source_not_allowed");
+  }
+
+  if (out.visible === true && auditValue(out.value, [field]).length > 0) {
+    return hide("value_audit_failed");
+  }
+
+  return out;
+}
+
 function auditManifestEntry(entry) {
   const failures = [];
   if (!isPlainObject(entry)) {
@@ -274,6 +312,7 @@ function auditDictionaryCoverage(sourceDictionary = dictionary) {
 module.exports = {
   allowedContractsForField,
   allowedDecoderContractsForField,
+  applyManifestEntryGate,
   auditActionArtifact,
   auditArtifact,
   auditArtifactCollection,
