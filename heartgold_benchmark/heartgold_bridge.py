@@ -485,6 +485,7 @@ def promoted_current_ui_visible_text(current_ui: Any, *, dialog_visible: bool, s
     ):
         return None
     source = current_ui.get("source")
+    oak_speech_source = source == OAK_SPEECH_CURRENT_UI_SOURCE
     bank = current_ui.get("messageBank")
     lines: List[str] = []
     for message_id in current_ui.get("messageIds") if isinstance(current_ui.get("messageIds"), list) else []:
