@@ -47,11 +47,11 @@ The main observation mode is `ram_assisted`: each response contains the current 
 
 ## Player Modes
 
-Codex Desktop is an external-player bridge mode: the harness serves the current observation and accepts actions, while the player model is selected in Codex Desktop. The player begins with `GET /codexDesktop/observation`. `-Model` / `CODEX_DESKTOP_MODEL` are optional metrics labels only.
-
-Codex CLI is a managed-player mode: the harness invokes `codex exec -m`, so it requires an explicit model. Pass `-AgentProvider codex-cli -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
-
-OpenAI API is a managed-player mode: the Node server runs the player loop through OpenAI API calls. It requires `OPENAI_API_KEY`; pass `-AgentProvider openai -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `OPENAI_MODEL`.
+| Mode | Pick this if... | What happens |
+| --- | --- | --- |
+| Codex Desktop | You want to play from a Codex Desktop chat. | You choose the model in Codex Desktop. The harness serves the live observation/action endpoints and the chat uses them to play. |
+| Codex CLI | You want the harness to run a Codex CLI model for you. | The harness calls `codex exec -m <model>` for each turn and applies the returned action to the emulator. |
+| OpenAI API | You want the classic server-run agent loop. | The Node server calls the OpenAI API for each turn and applies the returned tool/action response to the emulator. |
 
 ## Quick Start
 
@@ -71,16 +71,17 @@ $env:BIZHAWK_EXE = 'C:\path\to\EmuHawk.exe'
 $env:HEARTGOLD_ROM = 'C:\path\to\PokémonHeartGold(USA).nds'
 ```
 
-Then choose one startup path.
+Then choose one startup path:
 
-### Codex Desktop
+<details>
+<summary><strong>Codex Desktop</strong> - choose a model in Codex Desktop</summary>
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -ReasoningEffort xhigh
 ```
 
 The script starts the Python bridge, launches BizHawk, loads the Lua bridge, starts the Node server, and serves the dashboard.
-It does not start a model by itself. In Codex Desktop, choose a player model and start a player chat with:
+When the stack is ready, choose a player model in Codex Desktop and start a chat with:
 
 ```text
 Use the local HeartGold player interface.
@@ -93,22 +94,30 @@ Continue from the returned observation.
 
 The returned observation includes the runtime prompt, current screenshot, decoded RAM state, recent history, and action schema.
 
-### Codex CLI
+</details>
+
+<details>
+<summary><strong>Codex CLI</strong> - run through codex exec</summary>
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-benchmark.ps1 -AgentProvider codex-cli -Model <your-model>
 ```
 
-Codex CLI mode starts the same local stack, builds the prompt and action schema, runs `codex exec`, reads the returned JSON action, and applies it to the emulator.
+This starts the same local stack, builds the prompt and action schema, runs `codex exec`, reads the returned JSON action, and applies it to the emulator.
 
-### OpenAI API
+</details>
+
+<details>
+<summary><strong>OpenAI API</strong> - run through the OpenAI API</summary>
 
 ```powershell
 $env:OPENAI_API_KEY = '<your-api-key>'
 powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-benchmark.ps1 -AgentProvider openai -Model <your-model>
 ```
 
-OpenAI API mode starts the same local stack, runs the player loop inside the Node server, and applies each tool/action response to the emulator.
+This starts the same local stack, runs the player loop inside the Node server, and applies each tool/action response to the emulator.
+
+</details>
 
 Stop harness-owned processes:
 
