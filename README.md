@@ -84,12 +84,12 @@ The script starts the Python bridge, launches BizHawk, loads the Lua bridge, sta
 When the stack is ready, choose a player model in Codex Desktop and start a chat with:
 
 ```text
-Use the local HeartGold player interface.
+Use the local HeartGold player HTTP interface.
 
 First fetch:
 GET http://127.0.0.1:9885/codexDesktop/observation
 
-Continue from the returned observation.
+Read the returned observation and continue from it.
 ```
 
 The returned observation includes the runtime prompt, current screenshot, decoded RAM state, recent history, and action schema.
