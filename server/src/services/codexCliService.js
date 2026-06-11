@@ -170,7 +170,7 @@ function actionOutputSchema(exposure = null, gameDataJson = null) {
     type: "object",
     additionalProperties: false,
     properties: {
-      step_details: { type: "string" },
+      step_details: nullableString,
       actions: {
         type: "array",
         minItems: 1,
@@ -260,10 +260,10 @@ function actionOutputSchema(exposure = null, gameDataJson = null) {
           ],
         },
       },
-      chat_message: { type: "string" },
-      avatar_emotion: { type: "string" },
+      chat_message: nullableString,
+      avatar_emotion: nullableString,
     },
-    required: ["step_details", "actions", "chat_message", "avatar_emotion"],
+    required: ["actions"],
   };
 }
 
@@ -538,7 +538,13 @@ function validateActionPayload(payload, exposure = null, gameDataJson = null) {
       throw new Error(`Action ${index} has invalid type '${action.type}'`);
     }
   }
-  return payload;
+  return {
+    ...payload,
+    step_details: typeof payload.step_details === "string" ? payload.step_details : "",
+    chat_message: typeof payload.chat_message === "string" ? payload.chat_message : "",
+    avatar_emotion:
+      typeof payload.avatar_emotion === "string" && payload.avatar_emotion ? payload.avatar_emotion : "thinking",
+  };
 }
 
 async function callCodexCliForAction({ apiInput, gameDataJson, reasoningEffort, imagePath = null, imageMeta = null }) {

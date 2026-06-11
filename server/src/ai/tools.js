@@ -1656,10 +1656,10 @@ function defineTools() {
 
     // Main schema for the execute_action tool
     const executeActionSchema = z.object({
-        step_details: z.string().describe("An explanation of what happened in the previous step and what the next step is. Include all necessary details."),
+        step_details: z.string().nullable().describe("Optional player-authored continuity for this action batch. Use it when it helps preserve useful gameplay context; otherwise use null."),
         actions: actionUnionSchema.array().min(1).describe("One or multiple action(s) to execute"),
-        chat_message: z.string().describe("A narrative comment describing your intent, reaction, or what happened during this step."),
-        avatar_emotion: z.enum(AVATAR_EMOTIONS).describe("Select the avatar emotion that best matches your current mood, reaction, or activity. Choose from basic emotions (happy, sad, angry, etc.), specific reactions (surprised, confused, thinking, etc.), action-based emotions (reading, throwing_pokeball, etc.), or themed cosplay options when appropriate for the context."),
+        chat_message: z.string().nullable().describe("Optional player-authored gameplay commentary. Use it when there is a meaningful intent, reaction, or event to express; otherwise use null."),
+        avatar_emotion: z.enum(AVATAR_EMOTIONS).nullable().describe("Optional player-authored expression for this turn. Choose a mood from the current gameplay beat when useful; otherwise use null."),
     });
 
     // Definition of the unique tool
@@ -1703,6 +1703,9 @@ async function handleToolCall(toolCall, gameDataJson, options = {}) {
     let args;
     try {
         args = JSON.parse(argsString);
+        args.step_details = typeof args.step_details === "string" ? args.step_details : "";
+        args.chat_message = typeof args.chat_message === "string" ? args.chat_message : "";
+        args.avatar_emotion = typeof args.avatar_emotion === "string" && args.avatar_emotion ? args.avatar_emotion : "thinking";
         if (args?._codex_desktop_normalization?.actionCount != null) {
             normalizedActionSchemaCount = Math.max(
                 normalizedActionSchemaCount,

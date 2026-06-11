@@ -1381,9 +1381,8 @@ ${!navigationValidated ? "Current minimap geometry is not shown in this observat
   if (state.selfCritiqueReminderPending) {
     userInputText += `
 <self_criticism_reminder>
-Before taking the next action, update the <memory> / <objectives> / <markers> sections exactly as indicated by your latest self-criticism using the memory / objectives / markers management tools.
-Read your self-criticism carefully and update the sections accordingly as mentioned in the self-criticism.
-You can safely update them all at once.
+If the latest self-criticism names a concrete memory, objective, or marker fix that is still supported by the current observation, apply that fix alongside your next useful gameplay action.
+If there is no concrete supported fix, keep playing from the current observation.
 </self_criticism_reminder>`;
     state.selfCritiqueReminderAcknowledged = true;
   }

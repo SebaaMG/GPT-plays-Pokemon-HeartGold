@@ -4775,6 +4775,9 @@ async function executeCodexDesktopAction(body = {}) {
     throw new Error("Codex Desktop action requires a prior observation with a prepared model image and screenshot hash");
   }
   validateDesktopExecuteActionEnvelope(args, normalization);
+  args.step_details = typeof args.step_details === "string" ? args.step_details : "";
+  args.chat_message = typeof args.chat_message === "string" ? args.chat_message : "";
+  args.avatar_emotion = typeof args.avatar_emotion === "string" && args.avatar_emotion ? args.avatar_emotion : "thinking";
   const callId = `codex_desktop_${Date.now()}`;
   const functionCall = {
     type: "function_call",

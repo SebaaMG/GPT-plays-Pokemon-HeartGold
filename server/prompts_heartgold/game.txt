@@ -62,10 +62,10 @@ Available input actions:
 - `a_until_end_of_dialog`: repeatedly advances simple dialog/text.
 - `touch`: taps the DS bottom screen. Default coordinates are bottom-local x 0..255, y 0..191 with `coordinate_space: "bottom"`. For full vertical screenshot coordinates, set `coordinate_space: "full_raw"` and `screen: "full"` on the 256x384 DS image. For scaled model-image coordinates, set `coordinate_space: "model_scaled"`, `screen: "full"`, and `source_width`/`source_height` from the current `model_input.image`. Do not use window/display coordinates. Ambiguous oversized coordinates and top-screen touch targets are rejected instead of clipped. A successful touch confirms input/visible effect, not that your intended semantic target was selected; verify the next screenshot before confirming starters, names, YES/NO prompts, or other irreversible UI.
 - `type_text`: preferred on HeartGold naming keyboards. It clears existing text, enters the requested A-Z/0-9 name with deterministic D-pad input, and confirms with Start. Use `value: "GPT"` for the player naming screen unless you deliberately choose a different valid name.
-- `write_memory` / `delete_memory`: persistent semantic notes you deliberately choose to keep.
-- `recall_reasoning_archive`: retrieves older self-authored `step_details` / `chat_message` records that fell out of short-term reasoning. It returns verbatim records only and does not press emulator buttons.
-- `update_objectives`: quest log.
-- `add_marker` / `delete_marker`: available only when map IDs/coordinates appear in the current observation.
+- `write_memory` / `delete_memory`: persistent semantic notes you deliberately choose to keep when they will help future play.
+- `recall_reasoning_archive`: optional retrieval of older self-authored `step_details` / `chat_message` records that fell out of short-term reasoning. It returns verbatim records only and does not press emulator buttons.
+- `update_objectives`: quest log updates when a goal changes or needs clearer continuity.
+- `add_marker` / `delete_marker`: optional map notes, available only when map IDs/coordinates appear in the current observation.
 - `path_to_location`: available only when the prompt explicitly marks navigation as enabled. It is a same-map actuator, not a route oracle, story walkthrough, or cross-map route planner.
 - `restart_console`: only after a deliberate in-game save.
 
@@ -160,7 +160,7 @@ Every turn:
 3. Continue from recent player reasoning when it is useful, or consult the reasoning archive if an older thought matters.
 4. Decide one useful action batch.
 5. Submit one `execute_action` envelope through the active game interface. In Codex Desktop self-running mode, POST the JSON to `/codexDesktop/action?include_next_observation=1` and keep playing from the returned `next_observation`.
-6. Include `step_details`, `chat_message`, and `avatar_emotion` as player-authored output fields. These are not emulator input; the actual input is only in `actions`. They are not style slots or a fixed template; choose your own wording and amount of detail from the current situation.
+6. Optionally include `step_details`, `chat_message`, and `avatar_emotion` when they add useful continuity or natural player commentary. These are not emulator input; the actual input is only in `actions`.
 
 Do not decide from truncated PowerShell object formatting. Assign endpoint results to variables and inspect only `model_input.image`, `model_input.user_input_text`, recent reasoning/history, memory/objectives, and the action schema.
 If a GET observation times out, retry GET once. If a POST action times out, do not repeat the same input first; GET a fresh observation to see whether the input already happened.
