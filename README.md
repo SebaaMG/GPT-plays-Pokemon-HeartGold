@@ -1,6 +1,5 @@
 # GPT Plays Pokémon HeartGold
 
-[![Release: v0.2.4](https://img.shields.io/badge/release-v0.2.4-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20BizHawk-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -44,7 +43,7 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop | Main local player path for this release. Choose the actual model or subagent in Codex Desktop. |
+| Codex Desktop | Main local player path. Choose the actual model or subagent in Codex Desktop. |
 
 ## Quick Start
 

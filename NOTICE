@@ -13,7 +13,7 @@ The FireRed project established the original public reference for connecting an
 LLM agent to a Pokemon emulator through an emulator script, bridge service,
 agent/action loop, memory/state surface, and dashboard.
 
-This public HeartGold release does not vendor the FireRed source tree, mGBA
+This repository does not vendor the FireRed source tree, mGBA
 bridge, FireRed ROM data, `pokefirered` submodule, or FireRed symbol file.
 
 The HeartGold harness is its own Nintendo DS/BizHawk implementation, including
