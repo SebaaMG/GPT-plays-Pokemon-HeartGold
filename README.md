@@ -1,6 +1,6 @@
 # GPT Plays Pokémon HeartGold
 
-[![Release: v0.2.3](https://img.shields.io/badge/release-v0.2.3-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.3)
+[![Release: v0.2.4](https://img.shields.io/badge/release-v0.2.4-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20BizHawk-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -44,7 +44,7 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop | Main local model/operator path for this release. Choose the actual player model in Codex Desktop. |
+| Codex Desktop | Main local player path for this release. Choose the actual model or subagent in Codex Desktop. |
 
 ## Quick Start
 
@@ -70,13 +70,8 @@ Start the HeartGold harness:
 powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -ReasoningEffort xhigh
 ```
 
-Codex Desktop chooses the actual player model outside the harness. If you want `/health` and benchmark metrics to carry the intended model label, pass it as optional metadata:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -Model gpt-5.4-mini -ReasoningEffort xhigh
-```
-
 The script starts the Python bridge, launches BizHawk, loads the Lua bridge, starts the Node server, and serves the dashboard.
+It does not start a model by itself. In Codex Desktop, choose the model or spawn the subagent player, then have it use the local `/codexDesktop` endpoints.
 
 Stop harness-owned processes:
 
@@ -100,11 +95,11 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 | `POST http://127.0.0.1:9885/codexDesktop/action` | Submit the next action |
 | `http://127.0.0.1:5173` | Dashboard when enabled |
 
-## Model Selection
+## Player Modes
 
-Codex Desktop runs do not require a model in the harness because the actual model is selected in Codex Desktop or by the subagent launcher. `-Model` / `CODEX_DESKTOP_MODEL` are optional benchmark labels only.
+Codex Desktop is an external-player bridge mode: the harness serves the current observation and accepts actions, while the actual player model is selected in Codex Desktop. `-Model` / `CODEX_DESKTOP_MODEL` are optional metrics labels only.
 
-Codex CLI runs do require an explicit model because the harness invokes `codex exec -m`. Pass `-Model <your-model>` to the start script, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
+Codex CLI is a managed-player mode: the harness invokes `codex exec -m`, so it requires an explicit model. Pass `-AgentProvider codex-cli -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
 
 ## What The Agent Sees
 
