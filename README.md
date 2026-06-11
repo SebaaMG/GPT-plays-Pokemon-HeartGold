@@ -1,6 +1,6 @@
 # GPT Plays Pokémon HeartGold
 
-[![Release: v0.2.2](https://img.shields.io/badge/release-v0.2.2-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.2)
+[![Release: v0.2.3](https://img.shields.io/badge/release-v0.2.3-green.svg)](https://github.com/SebaaMG/GPT-plays-Pokemon-HeartGold/releases/tag/v0.2.3)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20BizHawk-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -44,7 +44,7 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop | Main local model/operator path for this release. Choose an available Codex model explicitly. |
+| Codex Desktop | Main local model/operator path for this release. Choose the actual player model in Codex Desktop. |
 
 ## Quick Start
 
@@ -64,13 +64,13 @@ $env:BIZHAWK_EXE = 'C:\path\to\EmuHawk.exe'
 $env:HEARTGOLD_ROM = 'C:\path\to\PokémonHeartGold(USA).nds'
 ```
 
-Start the HeartGold harness with an explicit Codex model:
+Start the HeartGold harness:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -Model <your-model> -ReasoningEffort xhigh
+powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -ReasoningEffort xhigh
 ```
 
-For example, if it is available in your account:
+Codex Desktop chooses the actual player model outside the harness. If you want `/health` and benchmark metrics to carry the intended model label, pass it as optional metadata:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.ps1 -Model gpt-5.4-mini -ReasoningEffort xhigh
@@ -102,7 +102,9 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 
 ## Model Selection
 
-Codex Desktop and Codex CLI runs require an explicit model. Pass `-Model <your-model>` to the start scripts, or set `CODEX_DESKTOP_MODEL`, `CODEX_MODEL`, or `OPENAI_MODEL` in your local environment. The project does not include a baked-in Codex model default.
+Codex Desktop runs do not require a model in the harness because the actual model is selected in Codex Desktop or by the subagent launcher. `-Model` / `CODEX_DESKTOP_MODEL` are optional benchmark labels only.
+
+Codex CLI runs do require an explicit model because the harness invokes `codex exec -m`. Pass `-Model <your-model>` to the start script, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
 
 ## What The Agent Sees
 

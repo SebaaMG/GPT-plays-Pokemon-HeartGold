@@ -51,8 +51,8 @@ function Resolve-AgentModel {
 }
 
 $ResolvedModel = Resolve-AgentModel
-if (($AgentProvider -eq "codex-desktop" -or $AgentProvider -eq "codex-cli") -and -not $ResolvedModel) {
-  throw "HeartGold $AgentProvider requires an explicit model. Pass -Model <model> or set CODEX_DESKTOP_MODEL, CODEX_MODEL, or OPENAI_MODEL."
+if ($AgentProvider -eq "codex-cli" -and -not $ResolvedModel) {
+  throw "HeartGold codex-cli requires an explicit model. Pass -Model <model> or set CODEX_MODEL, CODEX_DESKTOP_MODEL, or OPENAI_MODEL."
 }
 if ($ResolvedModel) { $Model = $ResolvedModel }
 
