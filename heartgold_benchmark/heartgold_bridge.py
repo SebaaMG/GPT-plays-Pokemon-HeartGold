@@ -3408,6 +3408,11 @@ class HeartGoldBridge:
         except ValueError:
             self.full_snapshot_timeout_s = 20.0
         self.full_snapshot_timeout_s = max(1.0, min(self.full_snapshot_timeout_s, 45.0))
+        try:
+            self.request_lock_timeout_s = float(os.environ.get("HEARTGOLD_REQUEST_LOCK_TIMEOUT_S", "2.0"))
+        except ValueError:
+            self.request_lock_timeout_s = 2.0
+        self.request_lock_timeout_s = max(0.1, min(self.request_lock_timeout_s, 10.0))
         self.last_temporal_observation: Optional[Dict[str, Any]] = None
         self.recent_visible_text: List[Dict[str, Any]] = []
         self.ipc_timeout_count = 0
@@ -4112,10 +4117,15 @@ class HeartGoldBridge:
         return
 
     def request(self, fields: Dict[str, Any], timeout_s: float = 10.0) -> Dict[str, Any]:
-        with self.request_lock:
+        op = str(fields.get("op") or "")
+        lock_acquired = self.request_lock.acquire(timeout=self.request_lock_timeout_s)
+        if not lock_acquired:
+            detail = f"Timed out waiting for bridge IPC request lock for {op or 'unknown'}"
+            self.record_ipc_timeout(op, detail)
+            raise HTTPException(status_code=504, detail=detail)
+        try:
             self.ensure_dirs()
             self.ensure_runtime_ready()
-            op = str(fields.get("op") or "")
             max_attempts = 2 if op == "snapshot" else 1
             for attempt in range(1, max_attempts + 1):
                 req_id = str(uuid.uuid4())
@@ -4157,6 +4167,8 @@ class HeartGoldBridge:
                     self.ensure_runtime_ready()
                     continue
                 raise HTTPException(status_code=504, detail=detail)
+        finally:
+            self.request_lock.release()
 
     def recover_timed_out_action(
         self,

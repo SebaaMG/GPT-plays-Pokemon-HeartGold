@@ -82,7 +82,7 @@ const config = {
   // --- Python bridge configuration ---
   pythonServer: {
     baseUrl: process.env.PYTHON_BASE_URL || DEFAULT_PYTHON_BASE_URL,
-    timeoutMs: Number(process.env.PYTHON_REQUEST_TIMEOUT_MS || (IS_HEARTGOLD ? 90000 : 10000)),
+    timeoutMs: Number(process.env.PYTHON_REQUEST_TIMEOUT_MS || (IS_HEARTGOLD ? 45000 : 10000)),
     actionTimeoutMs: Number(process.env.PYTHON_ACTION_TIMEOUT_MS || (IS_HEARTGOLD ? 90000 : 30000)),
     launchTimeoutMs: Number(process.env.PYTHON_LAUNCH_TIMEOUT_MS || (IS_HEARTGOLD ? 60000 : 30000)),
     bootstrapTimeoutMs: Number(process.env.PYTHON_BOOTSTRAP_TIMEOUT_MS || (IS_HEARTGOLD ? 120000 : 60000)),

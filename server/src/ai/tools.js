@@ -1623,7 +1623,7 @@ function defineTools() {
 
     // Pathfinding schema
     const pathfindingActionSchema = z.object({
-        type: z.literal("path_to_location").describe("HeartGold same-map movement actuator, not a route oracle, story walkthrough, or cross-map pathfinder. Use only when the prompt marks path_to_location enabled and exposes current map_id/coordinates."),
+        type: z.literal("path_to_location").describe("HeartGold same-map movement actuator, not a walkthrough, story guide, or cross-map pathfinder. Use only when the prompt marks path_to_location enabled and exposes current map_id/coordinates."),
         x: z.number().describe("X coordinate of the destination."),
         y: z.number().describe("Y coordinate of the destination."),
         map_id: z.string().describe("ID of the current map where the same-map destination is located."),
