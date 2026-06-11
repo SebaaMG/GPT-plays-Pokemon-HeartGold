@@ -43,7 +43,7 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop | Main local player path. Choose the actual model or subagent in Codex Desktop. |
+| Codex Desktop | Main local player path. Choose the player model in Codex Desktop. |
 
 ## Quick Start
 
@@ -70,7 +70,18 @@ powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-codex-desktop.p
 ```
 
 The script starts the Python bridge, launches BizHawk, loads the Lua bridge, starts the Node server, and serves the dashboard.
-It does not start a model by itself. In Codex Desktop, choose the model or spawn the subagent player, then have it use the local `/codexDesktop` endpoints.
+It does not start a model by itself. In Codex Desktop, choose a player model and start a player chat with:
+
+```text
+Use the local HeartGold player interface.
+
+First fetch:
+GET http://127.0.0.1:9885/codexDesktop/observation
+
+Continue from the returned observation.
+```
+
+The returned observation includes the runtime prompt, current screenshot, decoded RAM state, recent history, and action schema.
 
 Stop harness-owned processes:
 
@@ -96,15 +107,21 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 
 ## Player Modes
 
-Codex Desktop is an external-player bridge mode: the harness serves the current observation and accepts actions, while the actual player model is selected in Codex Desktop. `-Model` / `CODEX_DESKTOP_MODEL` are optional metrics labels only.
+Codex Desktop is an external-player bridge mode: the harness serves the current observation and accepts actions, while the player model is selected in Codex Desktop. The player begins with `GET /codexDesktop/observation`. `-Model` / `CODEX_DESKTOP_MODEL` are optional metrics labels only.
 
 Codex CLI is a managed-player mode: the harness invokes `codex exec -m`, so it requires an explicit model. Pass `-AgentProvider codex-cli -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
 
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-benchmark.ps1 -AgentProvider codex-cli -Model <your-model>
+```
+
+In Codex CLI mode, the harness builds the prompt and action schema, runs `codex exec`, reads the returned JSON action, and applies it to the emulator.
+
 ## What The Agent Sees
 
-The agent plays from `GET /codexDesktop/observation`. That response contains the current screenshot and the current emulator RAM translated into readable gameplay fields by default.
+The agent plays from `GET /codexDesktop/observation`. That response contains `model_input.operator_prompt`, `model_input.user_input_text`, the current screenshot, decoded RAM state, recent history, and the action schema.
 
-The intended play surface is the running game: screen pixels plus translated current emulator state. Raw bytes, pointers, logs, runtime files, and monitor-only artifacts are not gameplay input.
+`model_input.operator_prompt` explains the endpoint loop and player boundaries. `model_input.user_input_text` carries the current gameplay prompt, memory/objectives, recent context, and RAM-assisted observation for that turn.
 
 ## Dashboard
 
