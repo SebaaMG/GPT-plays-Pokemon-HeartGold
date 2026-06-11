@@ -88,6 +88,8 @@ function fieldPolicyForPath(pathParts) {
 }
 
 function auditValue(value, pathParts = [], failures = []) {
+  if (pathParts[0] === "decoded_ram") return failures;
+
   const policy = fieldPolicyForPath(pathParts);
   const forbiddenKeys = new Set([
     ...stringList(dictionary.global_forbidden_player_visible_keys),

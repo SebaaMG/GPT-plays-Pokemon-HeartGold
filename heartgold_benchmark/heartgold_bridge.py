@@ -485,14 +485,12 @@ def promoted_current_ui_visible_text(current_ui: Any, *, dialog_visible: bool, s
     ):
         return None
     source = current_ui.get("source")
-    oak_speech_source = source == OAK_SPEECH_CURRENT_UI_SOURCE
     bank = current_ui.get("messageBank")
     lines: List[str] = []
-    if not oak_speech_source:
-        for message_id in current_ui.get("messageIds") if isinstance(current_ui.get("messageIds"), list) else []:
-            text = decode_current_ui_message(bank, message_id)
-            if text and text not in lines:
-                lines.append(text)
+    for message_id in current_ui.get("messageIds") if isinstance(current_ui.get("messageIds"), list) else []:
+        text = decode_current_ui_message(bank, message_id)
+        if text and text not in lines:
+            lines.append(text)
     option_lines: List[str] = []
     selected = safe_int(current_ui.get("selectedIndex"), -1)
     for idx, message_id in enumerate(current_ui.get("optionMessageIds") if isinstance(current_ui.get("optionMessageIds"), list) else []):
@@ -5473,6 +5471,15 @@ class HeartGoldBridge:
         dialog_detection = self.dialog_visual_detection()
         dialog_visible = bool(dialog_detection.get("active"))
         text_probe = ram.get("text_probe") if isinstance(ram.get("text_probe"), dict) else {}
+        global_app = ram.get("global_app") if isinstance(ram.get("global_app"), dict) else {}
+        global_app_data = global_app.get("app") if isinstance(global_app.get("app"), dict) else {}
+        global_app_name = str(global_app_data.get("app") or "")
+        global_app_active = bool(
+            global_app.get("active") is True
+            and global_app_data.get("active") is True
+            and global_app_name
+            and global_app_name not in {"none", "unknown"}
+        )
         field_menu = normalize_field_menu_from_ram(text_probe)
         naming_state = normalize_naming_from_ram(ram.get("naming"))
         naming_active = naming_state.get("active") is True
@@ -5529,6 +5536,7 @@ class HeartGoldBridge:
             "dialog": "current_visible_text_v1" if validated_dialog_visible else "visual_dialog_box_monitor_only",
             "naming": naming_state.get("source"),
             "movement": "ram_movement_index_and_vehicle_state",
+            "global_app": global_app.get("source"),
         }
         menu_visible = field_menu.get("active") is True and not validated_dialog_visible
         if in_battle:
@@ -5543,6 +5551,9 @@ class HeartGoldBridge:
         elif menu_visible:
             screen_mode = "menu"
             screen_mode_confidence = "validated_ram"
+        elif global_app_active:
+            screen_mode = global_app_name
+            screen_mode_confidence = "ram_global_overlay"
         elif dialog_visible:
             screen_mode = "inspect_screenshot"
             screen_mode_confidence = "visual_dialog_box_without_ram_visible_text"
@@ -6087,6 +6098,9 @@ class HeartGoldBridge:
             if not self.expose_oracle
             else {"raw_ram": ram, "rom_data_metadata": self.rom_data.metadata()},
             "ramDecoderConfidence": "partial",
+            "screen_mode": screen_mode,
+            "screen_mode_confidence": screen_mode_confidence,
+            "global_app": global_app,
             "positionConfidence": reliability_details["position"]["confidence"],
             "battleConfidence": reliability_details["battle"]["confidence"],
             "inventoryConfidence": reliability_details["inventory"]["confidence"],
@@ -6163,6 +6177,7 @@ class HeartGoldBridge:
                         "diving": movement_vehicle_state.get("diving"),
                         "movementModeEvidence": movement_mode_evidence_value,
                     },
+                    "global_app": global_app,
                     "sources": mode_sources,
                 },
                 "party": {

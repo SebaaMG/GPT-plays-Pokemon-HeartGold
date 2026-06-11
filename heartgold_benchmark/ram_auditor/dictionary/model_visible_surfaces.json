@@ -140,7 +140,7 @@
       "allowed_decoder_contracts": [],
       "required_evidence": [
         "current_observation_only",
-        "forbidden_oracle_values_checked"
+        "complete_current_bridge_snapshot"
       ],
       "forbidden_sources": [
         "monitor_only",

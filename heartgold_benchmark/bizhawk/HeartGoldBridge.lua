@@ -514,6 +514,31 @@ CHOOSE_STARTER_SELECTION_STATE_NULL = 0
 CHOOSE_STARTER_SELECTION_STATE_INSPECT = 1
 CHOOSE_STARTER_SELECTION_STATE_CONFIRM = 2
 CHOOSE_STARTER_SPECIES_IDS = { 152, 155, 158 }
+HEAP_ID_TITLE_SCREEN = 30
+HEAP_ID_INTRO_MOVIE = 74
+HEAP_ID_MAIN_MENU = 79
+HEAP_ID_DELETE_SAVEDATA = 86
+TITLESCREEN_MAIN_PLAY = 2
+TITLESCREEN_EXIT_MODES = {
+  [0] = "unset",
+  [1] = "menu",
+  [2] = "clear_save",
+  [3] = "timeout",
+  [4] = "unused",
+  [5] = "mic_test",
+}
+MAIN_MENU_APP_OPTIONS = {
+  [0] = "title_screen",
+  [1] = "continue",
+  [2] = "new_game",
+  [3] = "pokewalker",
+  [4] = "mystery_gift",
+  [5] = "ranger",
+  [6] = "migrate_agb",
+  [7] = "connect_to_wii",
+  [8] = "wfc",
+  [9] = "wii_settings",
+}
 POKEGEAR_APP_OVERLAY_ID = 100
 GEAR_APP_MAP = 2
 POKEGEAR_MAP_TYPE_GEAR = 0
@@ -3499,6 +3524,191 @@ function signed32(value)
   if value == nil then return nil end
   if value >= 0x80000000 then return value - 0x100000000 end
   return value
+end
+
+function main_overlay_state_addr(language)
+  local profile = hgss_pointer_profile(language)
+  if profile == nil or profile.pid_pointer_addr == nil then return nil end
+  return profile.pid_pointer_addr - 0x04
+end
+
+function overlay_manager_state(overlay_manager)
+  if not valid_arm9_ptr(overlay_manager) then return nil end
+  local data_ptr = u32(overlay_manager + 0x1C)
+  return {
+    overlayManagerPtr = overlay_manager,
+    template = {
+      initPtr = u32(overlay_manager + 0x00),
+      execPtr = u32(overlay_manager + 0x04),
+      exitPtr = u32(overlay_manager + 0x08),
+      ovyId = signed32(u32(overlay_manager + 0x0C)),
+    },
+    execState = signed32(u32(overlay_manager + 0x10)),
+    procState = signed32(u32(overlay_manager + 0x14)),
+    argsPtr = u32(overlay_manager + 0x18),
+    dataPtr = data_ptr,
+    dataHeapId = valid_arm9_ptr(data_ptr) and u32(data_ptr + 0x00) or nil,
+  }
+end
+
+function decode_intro_movie_app(data_ptr, overlay)
+  return {
+    app = "intro_movie",
+    heapId = u32(data_ptr + 0x00),
+    overlayProcState = overlay and overlay.procState or nil,
+    overlayExecState = overlay and overlay.execState or nil,
+    totalFrameCount = signed32(u32(data_ptr + 0x04)),
+    introSkipped = u32(data_ptr + 0x08) == 1,
+    bgConfigPtr = u32(data_ptr + 0x0C),
+    spriteListPtr = u32(data_ptr + 0x10),
+    skipAllowed = u8(data_ptr + 0x628) == 1,
+    sceneStep = u8(data_ptr + 0x629),
+    sceneTimer = u8(data_ptr + 0x62A),
+    sceneNumber = u8(data_ptr + 0x62B),
+  }
+end
+
+function decode_title_screen_app(data_ptr, overlay)
+  local anim = data_ptr + 0x0CC
+  local exit_mode = u16(data_ptr + 0x2E0)
+  local initial_delay = u32(data_ptr + 0x2E4)
+  local proc_state = overlay and overlay.procState or nil
+  local start_enabled = u32(anim + 0x1A8)
+  return {
+    app = "title_screen",
+    heapId = u32(data_ptr + 0x00),
+    overlayProcState = proc_state,
+    overlayExecState = overlay and overlay.execState or nil,
+    bgConfigPtr = u32(data_ptr + 0x04),
+    animState = u32(anim + 0x00),
+    startInstructionFlashTimer = u16(anim + 0x17C),
+    startInstructionFlashEnabled = start_enabled == 1,
+    initialDelay = initial_delay,
+    timer = signed32(u32(data_ptr + 0x2F0)),
+    exitMode = exit_mode,
+    exitModeName = TITLESCREEN_EXIT_MODES[exit_mode] or "unknown",
+    cameraScene = signed32(u32(anim + 0x1F0)),
+    cameraSceneTimer = signed32(u32(anim + 0x1F4)),
+    gameTitleFadeInTimer = signed32(u32(anim + 0x1F8)),
+    gameVersion = signed32(u32(anim + 0x200)),
+    startInputAcceptedByCurrentState = proc_state == TITLESCREEN_MAIN_PLAY and initial_delay == 0,
+  }
+end
+
+function decode_main_menu_app(data_ptr, overlay)
+  local options = {}
+  for i = 0, 9 do
+    local raw = u32(data_ptr + 0xEC + i * 4)
+    if raw ~= nil and raw > 0 and raw <= 9 then
+      options[#options + 1] = {
+        index = i,
+        option = raw,
+        name = MAIN_MENU_APP_OPTIONS[raw] or "unknown",
+      }
+    end
+  end
+  local current_option = u16(data_ptr + 0x54)
+  local selected_app = signed32(u32(data_ptr + 0x58))
+  return {
+    app = "main_menu",
+    overlayProcState = overlay and overlay.procState or nil,
+    overlayExecState = overlay and overlay.execState or nil,
+    bgConfigPtr = u32(data_ptr + 0x00),
+    saveDataPtr = u32(data_ptr + 0x04),
+    currentOption = current_option,
+    currentNewGameOption = u16(data_ptr + 0x56),
+    currentOptionName = MAIN_MENU_APP_OPTIONS[current_option],
+    selectedApp = selected_app,
+    selectedAppName = MAIN_MENU_APP_OPTIONS[selected_app],
+    availableOptions = options,
+    frames = signed32(u32(data_ptr + 0x18)),
+    hasPokedex = u32(data_ptr + 0x4C) == 1,
+    badges = u32(data_ptr + 0x50),
+  }
+end
+
+function decode_check_savedata_app(data_ptr, overlay)
+  return {
+    app = "check_savedata",
+    heapId = u32(data_ptr + 0x00),
+    overlayProcState = overlay and overlay.procState or nil,
+    overlayExecState = overlay and overlay.execState or nil,
+    mainState = signed32(u32(data_ptr + 0x04)),
+    msgNum = u32(data_ptr + 0x08),
+    printState = signed32(u32(data_ptr + 0x0C)),
+    textPrinterId = u32(data_ptr + 0x10),
+    bgConfigPtr = u32(data_ptr + 0x1C),
+    saveDataPtr = u32(data_ptr + 0x34),
+    saveStatusFlags = u32(data_ptr + 0x3C),
+  }
+end
+
+function decode_global_app_from_overlay(root, overlay)
+  if overlay == nil or not valid_arm9_ptr(overlay.dataPtr) then
+    return { app = "none", active = false, reason = "overlay_data_unavailable" }
+  end
+  local data_ptr = overlay.dataPtr
+  local heap_id = overlay.dataHeapId
+  local decoded = nil
+  if heap_id == HEAP_ID_INTRO_MOVIE then
+    decoded = decode_intro_movie_app(data_ptr, overlay)
+  elseif heap_id == HEAP_ID_TITLE_SCREEN then
+    decoded = decode_title_screen_app(data_ptr, overlay)
+  elseif heap_id == HEAP_ID_DELETE_SAVEDATA then
+    decoded = decode_check_savedata_app(data_ptr, overlay)
+  elseif overlay.template and (overlay.template.ovyId == 74 or root.mainOverlayId == 74) then
+    decoded = decode_main_menu_app(data_ptr, overlay)
+  else
+    local bg_config = u32(data_ptr + 0x00)
+    if valid_arm9_ptr(bg_config) and u32(bg_config + 0x00) == HEAP_ID_MAIN_MENU then
+      decoded = decode_main_menu_app(data_ptr, overlay)
+    end
+  end
+  if decoded == nil then
+    decoded = {
+      app = "unknown",
+      heapId = heap_id,
+      overlayProcState = overlay.procState,
+      overlayExecState = overlay.execState,
+      dataPtr = data_ptr,
+      reason = "active_overlay_app_not_decoded",
+    }
+  end
+  decoded.active = true
+  decoded.dataPtr = data_ptr
+  return decoded
+end
+
+function decode_global_app_state(language)
+  local state_addr = main_overlay_state_addr(language)
+  if not valid_arm9_ptr(state_addr) then
+    return {
+      active = false,
+      source = "Main._02111868.active_overlay_manager",
+      contract = "global_main_overlay_current_ram_state_v1",
+      reason = "main_overlay_state_addr_unavailable",
+    }
+  end
+  local overlay_manager = u32(state_addr + 0x04)
+  local root = {
+    active = valid_arm9_ptr(overlay_manager),
+    source = "Main._02111868.active_overlay_manager",
+    contract = "global_main_overlay_current_ram_state_v1",
+    mainStatePtr = state_addr,
+    mainOverlayId = signed32(u32(state_addr + 0x00)),
+    overlayManagerPtr = overlay_manager,
+    queuedMainOverlayId = signed32(u32(state_addr + 0x08)),
+    queuedMainOverlayTemplatePtr = u32(state_addr + 0x0C),
+    frame = emu.framecount(),
+  }
+  if not root.active then
+    root.reason = "main_overlay_manager_null_or_invalid"
+    return root
+  end
+  local overlay = overlay_manager_state(overlay_manager)
+  root.overlay = overlay
+  root.app = decode_global_app_from_overlay(root, overlay)
+  return root
 end
 
 local block_orders = {
@@ -6652,6 +6862,9 @@ function decode_ram_state()
   local pointer_profile = hgss_pointer_profile(language)
   local base = u32(pointer_profile.pid_pointer_addr)
   local save_like = u32(pointer_profile.trainer_ids_pointer_addr)
+  local global_app = timed_decode("global_app", function()
+    return decode_global_app_state(language)
+  end)
 
   local runtime_position = timed_decode("runtime_position", function()
     return position_candidate(base, "pidPointer base+0x39C dynamic candidate", 0x39C, 0x3A4, 0x3A8, 0x3AC)
@@ -6799,6 +7012,7 @@ function decode_ram_state()
     failed_ram_reads = FAILED_RAM_READS,
     rom_code_u24 = rom_code,
     language_u8 = language,
+    global_app = global_app,
     pointers = {
       base = base,
       save_like = save_like,
@@ -6958,6 +7172,7 @@ function decode_trace_ram_state()
   local pointer_profile = hgss_pointer_profile(language)
   local base = u32(pointer_profile.pid_pointer_addr)
   local save_like = u32(pointer_profile.trainer_ids_pointer_addr)
+  local global_app = decode_global_app_state(language)
   local runtime_position = position_candidate(base, "pidPointer base+0x39C dynamic candidate", 0x39C, 0x3A4, 0x3A8, 0x3AC)
   local field_system_root, field_system_candidates = find_field_system(false, save_like)
   local object_position, object_candidates = player_object_position(false, field_system_root)
@@ -6990,6 +7205,7 @@ function decode_trace_ram_state()
     domain_mode = MEMORY_DOMAIN_MODE,
     failed_ram_reads = FAILED_RAM_READS,
     language_u8 = language,
+    global_app = global_app,
     pointers = {
       base = base,
       save_like = save_like,

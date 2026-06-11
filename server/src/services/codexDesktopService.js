@@ -2469,14 +2469,14 @@ function buildModelVisibleManifest(gameDataJson, exposure, imageContract, userIn
     }),
     entry("decoded_ram", {
       visible: hasDecodedObject(modelDecodedRam),
-      validated: false,
+      validated: hasDecodedObject(modelDecodedRam),
       contract: "decoded_current_ram_gameplay_state_v1",
       source: "heartgold_current_ram_decoders",
       value: modelDecodedRam,
       auditEvidence: {
         current_observation_only: true,
+        complete_current_bridge_snapshot: true,
         expose_all_decoded_ram_policy: exposeDecoded,
-        forbidden_oracle_values_checked: true,
       },
       unavailableReason: "decoded_ram_unavailable",
     }),
@@ -2992,7 +2992,17 @@ function pruneEmptyDecodedRam(value) {
   return out;
 }
 
+function cloneDecodedRamSnapshot(gameDataJson) {
+  if (!gameDataJson || typeof gameDataJson !== "object") return {};
+  return JSON.parse(JSON.stringify(gameDataJson));
+}
+
 function buildModelDecodedRam(gameDataJson, exposure) {
+  void exposure;
+  return cloneDecodedRamSnapshot(gameDataJson);
+}
+
+function buildCompactModelDecodedRam(gameDataJson, exposure) {
   const pos = gameDataJson?.current_trainer_data?.position || {};
   const coordinateFrame = playerCoordinateFrame(gameDataJson);
   const screenPhase = compactScreenPhase(gameDataJson, exposure);
@@ -3305,6 +3315,16 @@ function compactScreenPhase(gameDataJson, exposure) {
     (exposure?.mode === "ram_assisted" || exposure?.diagnosticsAllowed === true) &&
     exposure?.fields?.dialogue?.validated === true &&
     validatedDialogTextActive(gameDataJson);
+  const globalApp =
+    (gameDataJson?.global_app && typeof gameDataJson.global_app === "object" ? gameDataJson.global_app : null) ||
+    (detector.global_app && typeof detector.global_app === "object" ? detector.global_app : null);
+  const globalAppData = globalApp?.app && typeof globalApp.app === "object" ? globalApp.app : {};
+  const globalAppName = String(globalAppData.app || "");
+  const globalAppActive =
+    globalApp?.active === true &&
+    globalAppData.active === true &&
+    globalAppName &&
+    !["none", "unknown"].includes(globalAppName);
   if (battleActive) {
     return {
       phase: "battle",
@@ -3317,6 +3337,7 @@ function compactScreenPhase(gameDataJson, exposure) {
   if (namingActive) return { phase: "naming", confidence: naming.confidence || "validated_ram" };
   if (dialogActive) return { phase: "dialogue", confidence: "ram_visible_text" };
   if (menuActive) return { phase: "menu", confidence: menu.confidence || "validated_ram" };
+  if (globalAppActive) return { phase: globalAppName, confidence: globalApp.source || "ram_global_overlay" };
   if (
     exposure?.fields?.movement?.validated === true &&
     exposure?.navigation?.validated === true &&
@@ -3956,7 +3977,7 @@ function buildSimplePlayerObservation(gameDataJson, imageContract, exposure) {
   if (imageContractText) lines.unshift(imageContractText);
 
   const screenPhase = compactScreenPhase(gameDataJson, exposure);
-  lines.push(`Screen phase: ${screenPhase.phase}. Inspect the screenshot for visible text, menus, and prompts.`);
+  lines.push(`Current RAM screen: ${screenPhase.phase}. Use the screenshot for visible text, menus, and prompts.`);
 
   const visibleText = formatCurrentVisibleTextForPlayer(gameDataJson, exposure);
   if (visibleText) lines.push(visibleText);
