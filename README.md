@@ -43,13 +43,15 @@ The main observation mode is `ram_assisted`: each response contains the current 
 | Node.js | 18+ recommended. |
 | BizHawk | 2.11 with the NDS melonDS core. |
 | Pokémon HeartGold ROM | User-provided legal copy. Not included. |
-| Codex Desktop or Codex CLI | Player runtime. Choose one mode below. |
+| Codex Desktop, Codex CLI, or OpenAI API | Player runtime. Choose one mode below. |
 
 ## Player Modes
 
 Codex Desktop is an external-player bridge mode: the harness serves the current observation and accepts actions, while the player model is selected in Codex Desktop. The player begins with `GET /codexDesktop/observation`. `-Model` / `CODEX_DESKTOP_MODEL` are optional metrics labels only.
 
 Codex CLI is a managed-player mode: the harness invokes `codex exec -m`, so it requires an explicit model. Pass `-AgentProvider codex-cli -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `CODEX_MODEL`, `CODEX_DESKTOP_MODEL`, or `OPENAI_MODEL`.
+
+OpenAI API is a managed-player mode: the Node server runs the player loop through OpenAI API calls. It requires `OPENAI_API_KEY`; pass `-AgentProvider openai -Model <your-model>` to `scripts\start-heartgold-benchmark.ps1`, or set `OPENAI_MODEL`.
 
 ## Quick Start
 
@@ -99,6 +101,15 @@ powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-benchmark.ps1 -
 
 Codex CLI mode starts the same local stack, builds the prompt and action schema, runs `codex exec`, reads the returned JSON action, and applies it to the emulator.
 
+### OpenAI API
+
+```powershell
+$env:OPENAI_API_KEY = '<your-api-key>'
+powershell -ExecutionPolicy Bypass -File scripts\start-heartgold-benchmark.ps1 -AgentProvider openai -Model <your-model>
+```
+
+OpenAI API mode starts the same local stack, runs the player loop inside the Node server, and applies each tool/action response to the emulator.
+
 Stop harness-owned processes:
 
 ```powershell
@@ -123,9 +134,9 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 
 ## What The Agent Sees
 
-The agent plays from `GET /codexDesktop/observation`. That response contains `model_input.operator_prompt`, `model_input.user_input_text`, the current screenshot, decoded RAM state, recent history, and the action schema.
+The player surface contains the current screenshot, decoded RAM state, recent history, memory/objectives, and the action schema.
 
-`model_input.operator_prompt` explains the endpoint loop and player boundaries. `model_input.user_input_text` carries the current gameplay prompt, memory/objectives, recent context, and RAM-assisted observation for that turn.
+In Codex Desktop mode, the player receives that surface from `GET /codexDesktop/observation`, including `model_input.operator_prompt` and `model_input.user_input_text`. In Codex CLI and OpenAI API modes, the server builds the same gameplay prompt/action context internally before asking the selected model for the next action.
 
 ## Dashboard
 
