@@ -3199,6 +3199,13 @@ function validatedDialogTextActive(gameDataJson) {
   return current && ["field_dialogue", "current_ui"].includes(String(current.surface || ""));
 }
 
+function visualPromptWithoutRamText(gameDataJson) {
+  return (
+    String(gameDataJson?.screen_mode || "") === "inspect_screenshot" &&
+    String(gameDataJson?.screen_mode_confidence || "") === "visual_dialog_box_without_ram_visible_text"
+  );
+}
+
 function compactScreenPhase(gameDataJson, exposure) {
   const detector = gameDataJson?.ram_assisted?.modeDetector || {};
   const battle = detector.battle && typeof detector.battle === "object" ? detector.battle : {};
@@ -3882,6 +3889,9 @@ function buildSimplePlayerObservation(gameDataJson, imageContract, exposure) {
 
   const screenPhase = compactScreenPhase(gameDataJson, exposure);
   lines.push(`Current RAM screen: ${screenPhase.phase}. Use the screenshot for visible text, menus, and prompts.`);
+  if (visualPromptWithoutRamText(gameDataJson)) {
+    lines.push("Visual prompt/dialogue is present, but RAM text is not validated. Decide from the current screenshot; overworld navigation/interactables may be background until the visible prompt is advanced or closed.");
+  }
 
   const visibleText = formatCurrentVisibleTextForPlayer(gameDataJson, exposure);
   if (visibleText) lines.push(visibleText);
