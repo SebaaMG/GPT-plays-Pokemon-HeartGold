@@ -4218,7 +4218,7 @@ class HeartGoldBridge:
         # heartbeat is stale. Let the IPC request prove liveness or timeout.
         return
 
-    def request(self, fields: Dict[str, Any], timeout_s: float = 10.0) -> Dict[str, Any]:
+    def request(self, fields: Dict[str, Any], timeout_s: float = 10.0, max_attempts: Optional[int] = None) -> Dict[str, Any]:
         op = str(fields.get("op") or "")
         lock_acquired = self.request_lock.acquire(timeout=self.request_lock_timeout_s)
         if not lock_acquired:
@@ -4228,11 +4228,12 @@ class HeartGoldBridge:
         try:
             self.ensure_dirs()
             self.ensure_runtime_ready()
-            max_attempts = 2 if op == "snapshot" else 1
-            for attempt in range(1, max_attempts + 1):
+            attempt_count = max_attempts if isinstance(max_attempts, int) and max_attempts > 0 else (2 if op == "snapshot" else 1)
+            for attempt in range(1, attempt_count + 1):
                 req_id = str(uuid.uuid4())
                 request_fields = {"id": req_id, **fields}
                 request_text = "\n".join(f"{key}={value}" for key, value in request_fields.items()) + "\n"
+                self.unlink_if_exists(self.request_path)
                 self.unlink_if_exists(self.response_path)
                 request_tmp = self.request_path.with_name(f"request.{req_id}.tmp")
                 request_tmp.write_text(request_text, encoding="utf-8")
@@ -4247,6 +4248,10 @@ class HeartGoldBridge:
                     if response and response.get("id") == req_id:
                         self.record_ipc_success(op)
                         return response
+                    if response and response.get("id") and response.get("id") != req_id:
+                        self.unlink_if_exists(self.response_path)
+                        time.sleep(0.05)
+                        continue
                     if response and not response.get("id"):
                         self.unlink_if_exists(self.response_path)
                     time.sleep(0.05)
@@ -4264,7 +4269,7 @@ class HeartGoldBridge:
                 self.unlink_if_exists(self.response_path)
                 detail = f"Timed out waiting for bridge response to {op}"
                 self.record_ipc_timeout(op, detail)
-                if attempt < max_attempts:
+                if attempt < attempt_count:
                     time.sleep(0.1)
                     self.ensure_runtime_ready()
                     continue
@@ -6831,12 +6836,12 @@ def request_data(anchorStatePath: Optional[str] = None) -> Dict[str, Any]:
         request["anchor_state_path"] = str(Path(anchorStatePath))
     full_snapshot_timeout_error = None
     try:
-        response = bridge.request(request, timeout_s=bridge.full_snapshot_timeout_s)
+        response = bridge.request(request, timeout_s=bridge.full_snapshot_timeout_s, max_attempts=1)
     except HTTPException as error:
         if getattr(error, "status_code", None) != 504:
             raise
         full_snapshot_timeout_error = str(getattr(error, "detail", error))
-        response = bridge.request(trace_only_request({"op": "snapshot"}), timeout_s=5.0)
+        response = bridge.request(trace_only_request({"op": "snapshot"}), timeout_s=5.0, max_attempts=1)
         response["fullSnapshotTimeoutRecovered"] = True
         response["fullSnapshotTimeoutError"] = full_snapshot_timeout_error
     data = bridge.build_snapshot_data(response)

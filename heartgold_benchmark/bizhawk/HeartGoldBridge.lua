@@ -50,8 +50,15 @@ function escape_json(value)
   value = tostring(value or "")
   value = value:gsub("\\", "\\\\")
   value = value:gsub("\"", "\\\"")
-  value = value:gsub("\r", "\\r")
-  value = value:gsub("\n", "\\n")
+  value = value:gsub("[%z\1-\31]", function(ch)
+    local byte = string.byte(ch)
+    if byte == 8 then return "\\b" end
+    if byte == 9 then return "\\t" end
+    if byte == 10 then return "\\n" end
+    if byte == 12 then return "\\f" end
+    if byte == 13 then return "\\r" end
+    return string.format("\\u%04x", byte)
+  end)
   return value
 end
 
