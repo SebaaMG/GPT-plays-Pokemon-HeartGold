@@ -66,7 +66,10 @@ const VALIDATED_RUNTIME_OBJECT_ENTRY_CONTRACTS = new Set([
   "current_runtime_map_object_bound_to_current_static_object",
 ]);
 
-const VALIDATED_VISIBLE_INTERACTABLE_ENTRY_CONTRACTS = new Set(["current_visible_bg_event_interactable_no_raw_script"]);
+const VALIDATED_VISIBLE_INTERACTABLE_ENTRY_CONTRACTS = new Set([
+  "current_visible_bg_event_interactable_no_raw_script",
+  "current_visible_runtime_object_talk_interactable_v1",
+]);
 
 const RUNTIME_OBJECT_ORACLE_KEYS = [
   "script_id",
@@ -577,10 +580,20 @@ function isValidatedVisibleInteractableEntry(gameDataJson, entry, exposure = nul
   for (const key of VISIBLE_INTERACTABLE_ORACLE_KEYS) {
     if (Object.prototype.hasOwnProperty.call(entry, key)) return false;
   }
-  if (!VALIDATED_VISIBLE_INTERACTABLE_ENTRY_CONTRACTS.has(String(entry.contract || ""))) return false;
-  if (entry.confidence !== "rom_derived") return false;
-  if (entry.source !== "heartgold_rom_zone_event_visible_bg_event") return false;
-  if (String(entry.kind || "") !== "check") return false;
+  const contract = String(entry.contract || "");
+  const kind = String(entry.kind || "");
+  if (!VALIDATED_VISIBLE_INTERACTABLE_ENTRY_CONTRACTS.has(contract)) return false;
+  if (contract === "current_visible_bg_event_interactable_no_raw_script") {
+    if (entry.confidence !== "rom_derived") return false;
+    if (entry.source !== "heartgold_rom_zone_event_visible_bg_event") return false;
+    if (kind !== "check") return false;
+  } else if (contract === "current_visible_runtime_object_talk_interactable_v1") {
+    if (entry.confidence !== "validated_ram") return false;
+    if (entry.source !== "FieldSystem.mapObjectManager_visible_runtime_object") return false;
+    if (kind !== "talk") return false;
+  } else {
+    return false;
+  }
   const x = finiteNumber(entry.x);
   const y = finiteNumber(entry.y);
   if (x == null || y == null) return false;

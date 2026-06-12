@@ -3055,6 +3055,108 @@ def visible_interactables_from_events(events: Any, visible_area: Any, player_x: 
     }
 
 
+def merge_runtime_object_interactables(
+    visible_interactables: Any,
+    runtime_objects_visible: Any,
+    visible_area: Any,
+    player_x: int,
+    player_y: int,
+    player_facing: str = "",
+) -> Dict[str, Any]:
+    base = visible_interactables if isinstance(visible_interactables, dict) else {}
+    entries = [dict(item) for item in base.get("entries", []) if isinstance(item, dict)]
+    current = base.get("current") if isinstance(base.get("current"), dict) else None
+    if not isinstance(runtime_objects_visible, list):
+        return {
+            **base,
+            "entries": entries,
+            "visibleCount": len(entries),
+            "current": current,
+        }
+
+    target = facing_target(player_x, player_y, player_facing)
+    seen = {
+        (str(item.get("kind") or ""), safe_int(item.get("x"), -1), safe_int(item.get("y"), -1))
+        for item in entries
+        if isinstance(item, dict)
+    }
+
+    def use_from_tiles(x: int, y: int) -> List[Dict[str, Any]]:
+        tiles = [
+            {"x": x, "y": y - 1, "requiredFacing": "down"},
+            {"x": x, "y": y + 1, "requiredFacing": "up"},
+            {"x": x - 1, "y": y, "requiredFacing": "right"},
+            {"x": x + 1, "y": y, "requiredFacing": "left"},
+        ]
+        out: List[Dict[str, Any]] = []
+        for tile in tiles:
+            tx = safe_int(tile.get("x"), -1)
+            ty = safe_int(tile.get("y"), -1)
+            if tx < 0 or ty < 0:
+                continue
+            if isinstance(visible_area, dict) and not point_in_visible_area(visible_area, tx, ty):
+                continue
+            out.append({"x": tx, "y": ty, "requiredFacing": str(tile["requiredFacing"])})
+        out.sort(key=lambda item: (abs(item["x"] - int(player_x)) + abs(item["y"] - int(player_y)), item["y"], item["x"]))
+        return out
+
+    for obj in runtime_objects_visible:
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("isVisible") is not True and obj.get("visible") is not True:
+            continue
+        if obj.get("isBlocking") is not True and obj.get("blocking") is not True:
+            continue
+        x = safe_int(obj.get("x"), -1)
+        y = safe_int(obj.get("y"), -1)
+        if x < 0 or y < 0 or (isinstance(visible_area, dict) and not point_in_visible_area(visible_area, x, y)):
+            continue
+        key = ("talk", x, y)
+        if key in seen:
+            continue
+        seen.add(key)
+        distance = abs(x - int(player_x)) + abs(y - int(player_y))
+        required_facing = "unknown"
+        if x == int(player_x) and y == int(player_y) - 1:
+            required_facing = "up"
+        elif x == int(player_x) and y == int(player_y) + 1:
+            required_facing = "down"
+        elif x == int(player_x) - 1 and y == int(player_y):
+            required_facing = "left"
+        elif x == int(player_x) + 1 and y == int(player_y):
+            required_facing = "right"
+        in_front = bool(target and target[0] == x and target[1] == y)
+        entry = {
+            "kind": "talk",
+            "targetType": "npc",
+            "name": obj.get("name") or obj.get("objectLabel") or "npc",
+            "x": x,
+            "y": y,
+            "distance": distance,
+            "useFrom": use_from_tiles(x, y),
+            "requiredFacing": required_facing,
+            "inFrontOfPlayer": in_front,
+            "source": "FieldSystem.mapObjectManager_visible_runtime_object",
+            "confidence": "validated_ram",
+            "contract": "current_visible_runtime_object_talk_interactable_v1",
+        }
+        entries.append(entry)
+        if in_front:
+            current = entry
+
+    entries.sort(key=lambda item: (safe_int(item.get("distance"), 9999), safe_int(item.get("y"), 9999), safe_int(item.get("x"), 9999), str(item.get("kind") or "")))
+    return {
+        **base,
+        "available": bool(entries) or bool(base.get("available", False)),
+        "source": "heartgold_rom_bg_events_plus_runtime_object_interactables",
+        "confidence": "validated_ram" if entries else base.get("confidence", "unavailable"),
+        "contract": "current_visible_interactable_affordances_v2",
+        "entries": entries[:32],
+        "visibleCount": len(entries),
+        "current": current,
+    }
+
+
 def visible_interactable_view_evidence(events: Any, visible_area: Any, visible_interactables: Any) -> Dict[str, Any]:
     """Audit-only proof for visible BG_EVENT interactables; not player text."""
     raw_bgs = events.get("bgEvents") if isinstance(events, dict) and isinstance(events.get("bgEvents"), list) else []
@@ -5598,11 +5700,6 @@ class HeartGoldBridge:
             player_y,
             str(resolved_position.get("facing") or ""),
         )
-        visible_interactable_evidence = visible_interactable_view_evidence(
-            rom_events,
-            visible_area,
-            visible_interactables,
-        )
         field_move_affordances = field_move_affordances_from_minimap(
             minimap_data,
             player_x,
@@ -5632,6 +5729,19 @@ class HeartGoldBridge:
             rom_events,
             str(resolved_position.get("facing") or ""),
             visible_area,
+        )
+        visible_interactables = merge_runtime_object_interactables(
+            visible_interactables,
+            npc_entries_visible,
+            visible_area,
+            player_x,
+            player_y,
+            str(resolved_position.get("facing") or ""),
+        )
+        visible_interactable_evidence = visible_interactable_view_evidence(
+            rom_events,
+            visible_area,
+            visible_interactables,
         )
         field_move_affordances = merge_runtime_field_move_affordances(
             field_move_affordances,

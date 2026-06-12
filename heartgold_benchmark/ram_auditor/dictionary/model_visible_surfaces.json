@@ -295,7 +295,8 @@
       "model_visible": true,
       "monitor_only": false,
       "allowed_contracts": [
-        "rom_derived_visible_current_map_bg_events_no_raw_scripts"
+        "rom_derived_visible_current_map_bg_events_no_raw_scripts",
+        "current_visible_interactable_affordances_v2"
       ],
       "allowed_decoder_contracts": [],
       "required_evidence": [
