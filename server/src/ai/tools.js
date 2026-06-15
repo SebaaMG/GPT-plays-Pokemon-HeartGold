@@ -177,7 +177,6 @@ const SEMANTIC_SUCCESS_OUTCOME_RE =
 const GENERIC_VISIBLE_EFFECT_ACTION_TYPES = new Set([
     "key_press",
     "button_sequence",
-    "a_until_end_of_dialog",
     "touch",
 ]);
 
@@ -441,7 +440,6 @@ const ALLOWED_KEYPRESS_KEYS = [
     "r",
     "start",
     "select",
-    "a_until_end_of_dialog",
     "face_up",
     "face_down",
     "face_left",
@@ -538,8 +536,8 @@ function keyListProblem(keys) {
     if (directionCount > 1) {
         return "key_press keys are simultaneous, not a sequence; multiple directional keys are invalid. Use button_sequence for movement sequences.";
     }
-    if (normalized.includes("a_until_end_of_dialog") && normalized.length > 1) {
-        return "a_until_end_of_dialog must be used alone as its own action or as the sole pseudo-key.";
+    if (normalized.includes("a_until_end_of_dialog")) {
+        return "a_until_end_of_dialog is not available in the HeartGold benchmark action surface. Use ordinary A/button inputs.";
     }
     return null;
 }
@@ -590,7 +588,7 @@ function heartGoldPressCommandFromKeys(keys, frames) {
     const faceKey = normalizedKeys.length === 1 ? FACE_KEY_TO_DIRECTION.get(normalizedKeys[0]) : null;
     const commandFrames = faceKey ? Math.min(2, Math.max(1, Math.trunc(Number(frames) || 2))) : frames;
     return {
-        type: normalizedKeys.includes("a_until_end_of_dialog") ? "a_until_end_of_dialog" : "press",
+        type: "press",
         buttons: faceKey ? [faceKey] : normalizedKeys,
         frames: commandFrames,
         ...(faceKey ? { allow_collision: true, intent: "face", no_step_intent: true } : {}),
@@ -740,7 +738,7 @@ function heartGoldPathPreflight(gameDataJson, plannedPath = null) {
         return {
             ok: false,
             message:
-                "Pathfinding is blocked because dialogue/text is active. Read the current screenshot/RAM text and explicitly advance it with A or a_until_end_of_dialog before path_to_location.",
+                "Pathfinding is blocked because dialogue/text is active. Read the current screenshot/RAM text and explicitly advance it with ordinary controls before path_to_location.",
         };
     }
     const navigation = heartGoldDecodedNavigationAllowed(gameDataJson);
@@ -817,12 +815,14 @@ function heartGoldButtonSequenceOutcome({ response, reliability, commandCount })
     const executedCount = Math.max(0, count - remaining.length);
     const responseOk = Boolean(response?.status);
     const verified = Boolean(reliability?.verified) && !reliability?.unreliable;
+    const semanticOutcome = reliability?.reason || (remaining.length ? "sequence_interrupted" : "completed");
     const finalCollisionAfterProgress = reliability?.reason === "sequence_ended_by_collision_after_progress";
     const mapTransitionAfterProgress = reliability?.reason === "sequence_interrupted_by_map_transition_after_progress";
     if (!responseOk || !verified) {
         return {
             success: false,
             remaining,
+            semanticOutcome,
             message: `Button sequence was not verified by the bridge: ${reliability?.reason || "bridge did not confirm the sequence"}.`,
         };
     }
@@ -832,6 +832,7 @@ function heartGoldButtonSequenceOutcome({ response, reliability, commandCount })
             remaining,
             partialProgress: true,
             transitionObserved: true,
+            semanticOutcome,
             message: `Partial button sequence: triggered a map transition after ${executedCount}/${count} step${executedCount === 1 ? "" : "s"}; ${remaining.length} queued step${remaining.length === 1 ? "" : "s"} were skipped. This is not target completion until the next fresh observation verifies the new map/position.`,
         };
     }
@@ -839,6 +840,7 @@ function heartGoldButtonSequenceOutcome({ response, reliability, commandCount })
         return {
             success: false,
             remaining,
+            semanticOutcome,
             message: `Partial button sequence: executed ${executedCount}/${count} sequential button steps; ${remaining.length} queued step${remaining.length === 1 ? "" : "s"} remained after interruption.`,
         };
     }
@@ -846,12 +848,14 @@ function heartGoldButtonSequenceOutcome({ response, reliability, commandCount })
         return {
             success: false,
             remaining,
+            semanticOutcome,
             message: `Partial button sequence: executed ${count}/${count} sequential button step${count === 1 ? "" : "s"}, but the final command collided and did not move as intended.`,
         };
     }
     return {
         success: true,
         remaining,
+        semanticOutcome: "completed",
         message: `Executed ${count}/${count} sequential button step${count === 1 ? "" : "s"}.`,
     };
 }
@@ -862,6 +866,8 @@ function heartGoldDialogAdvanceOutcome({ response, reliability, frames }) {
     if (!responseOk || !verified) {
         return {
             success: false,
+            semanticOutcome: "harness_error",
+            benchmarkVerified: false,
             message: `Dialogue advance was not verified by the bridge: ${reliability?.reason || "bridge did not confirm dialogue advancement"}.`,
         };
     }
@@ -874,12 +880,16 @@ function heartGoldDialogAdvanceOutcome({ response, reliability, frames }) {
     const stopReason = response?.trace?.stopReason || lastResult?.trace?.stopReason || null;
     if (dialogStillVisible && stopReason !== "dialog_cleared") {
         return {
-            success: false,
+            success: true,
+            semanticOutcome: "partial_progress",
+            benchmarkVerified: false,
             message: `Partial dialogue advance: A advanced text within ${frames} frames, but dialogue/menu text is still visible. Fetch a fresh observation before deciding the next input.`,
         };
     }
     return {
         success: true,
+        semanticOutcome: "completed",
+        benchmarkVerified: true,
         message: `Pressed A until dialogue advanced or ended within ${frames} frames.`,
     };
 }
@@ -916,6 +926,7 @@ async function resolveMapBounds(gameDataJson, mapId) {
 }
 
 function mapIdFromTraceState(st) {
+    if (st?.map?.id != null && String(st.map.id).trim()) return String(st.map.id).trim();
     const g = st?.map?.group;
     const n = st?.map?.number;
     if (typeof g !== "number" || typeof n !== "number") return null;
@@ -936,6 +947,103 @@ function formatMapLabel(mapId, mapName) {
     return id || name || "unknown";
 }
 
+function tracePlayerPosition(st) {
+    const pos = st?.player?.position;
+    if (Array.isArray(pos) && pos.length > 1) {
+        const x = Number(pos[0]);
+        const y = Number(pos[1]);
+        if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    }
+    if (pos && typeof pos === "object") {
+        const x = Number(pos.x);
+        const y = Number(pos.y ?? pos.z);
+        if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    }
+    const x = Number(st?.player?.x);
+    const y = Number(st?.player?.y ?? st?.player?.z);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    return null;
+}
+
+function tracePlayerFacing(st) {
+    const facing = st?.player?.facing;
+    return typeof facing === "string" && facing.trim() ? facing.trim() : null;
+}
+
+function traceDialogVisible(st) {
+    return st?.dialog?.inDialog === true || st?.dialog?.visible === true || st?.dialog?.active === true;
+}
+
+function traceMenuVisible(st) {
+    return st?.menu?.inMenu === true || st?.menu?.visible === true || st?.menu?.active === true;
+}
+
+function traceBattleActive(st) {
+    return st?.battle?.in_battle === true || st?.battle?.active === true;
+}
+
+function traceScreenPhase(st) {
+    const phase = st?.phase || st?.screenPhase || st?.screen_mode;
+    return typeof phase === "string" && phase.trim() ? phase.trim() : null;
+}
+
+function tracePositionText(pos) {
+    if (!pos) return null;
+    return `(${Math.trunc(pos.x)},${Math.trunc(pos.y)})`;
+}
+
+function genericTraceTransitionNotes(step) {
+    const before = step?.before || {};
+    const after = step?.after || {};
+    const notes = [];
+
+    const beforeDialog = traceDialogVisible(before);
+    const afterDialog = traceDialogVisible(after);
+    if (!beforeDialog && afterDialog) notes.push("dialog opened");
+    if (beforeDialog && !afterDialog) notes.push("dialog closed");
+
+    const beforeMenu = traceMenuVisible(before);
+    const afterMenu = traceMenuVisible(after);
+    if (!beforeMenu && afterMenu) notes.push("menu opened");
+    if (beforeMenu && !afterMenu) notes.push("menu closed");
+
+    const beforeBattle = traceBattleActive(before);
+    const afterBattle = traceBattleActive(after);
+    if (!beforeBattle && afterBattle) notes.push("battle started");
+    if (beforeBattle && !afterBattle) notes.push("battle ended");
+
+    const beforePos = tracePlayerPosition(before);
+    const afterPos = tracePlayerPosition(after);
+    if (beforePos && afterPos && (beforePos.x !== afterPos.x || beforePos.y !== afterPos.y)) {
+        notes.push(`position changed: ${tracePositionText(beforePos)} -> ${tracePositionText(afterPos)}`);
+    }
+
+    const beforeFacing = tracePlayerFacing(before);
+    const afterFacing = tracePlayerFacing(after);
+    if (beforeFacing && afterFacing && beforeFacing !== afterFacing) {
+        notes.push(`facing changed: ${beforeFacing} -> ${afterFacing}`);
+    }
+
+    const beforePhase = traceScreenPhase(before);
+    const afterPhase = traceScreenPhase(after);
+    if (beforePhase && afterPhase && beforePhase !== afterPhase) {
+        notes.push(`screen phase changed: ${beforePhase} -> ${afterPhase}`);
+    }
+
+    const beforeMap = mapKeyFromTraceState(before);
+    const afterMap = mapKeyFromTraceState(after);
+    if (beforeMap && afterMap && beforeMap !== afterMap) {
+        notes.push(
+            `map changed: ${formatMapLabel(mapIdFromTraceState(before), before?.map?.name)} -> ${formatMapLabel(
+                mapIdFromTraceState(after),
+                after?.map?.name
+            )}`
+        );
+    }
+
+    return notes;
+}
+
 function traceStateMarkdownLines(st, { includeMap = true } = {}) {
     const lines = [];
 
@@ -951,10 +1059,10 @@ function traceStateMarkdownLines(st, { includeMap = true } = {}) {
         lines.push(`- Phase: ${st.phase}`);
     }
 
-    const pos = st?.player?.position;
-    const x = Array.isArray(pos) && pos.length > 0 ? pos[0] : null;
-    const y = Array.isArray(pos) && pos.length > 1 ? pos[1] : null;
-    const facing = st?.player?.facing;
+    const pos = tracePlayerPosition(st);
+    const x = pos ? pos.x : null;
+    const y = pos ? pos.y : null;
+    const facing = tracePlayerFacing(st);
     const elevation = st?.player?.elevation;
     if (x != null && y != null) {
         const extras = [];
@@ -964,14 +1072,14 @@ function traceStateMarkdownLines(st, { includeMap = true } = {}) {
         lines.push(`- Position: (${x},${y})${extraText}`);
     }
 
-    const inDialog = !!st?.dialog?.inDialog;
+    const inDialog = traceDialogVisible(st);
     if (inDialog) {
         const menuType = st?.dialog?.menuType || "dialog";
         const text = st?.dialog?.visibleText;
         lines.push(`- Dialog (${menuType}): ${String(text ?? "")}`);
     }
 
-    if (st?.menu?.inMenu === true) {
+    if (traceMenuVisible(st)) {
         if (st?.battle?.in_battle === true || inDialog) {
             lines.push("- Lower-screen prompt/context: active during battle/dialogue");
         } else {
@@ -979,7 +1087,7 @@ function traceStateMarkdownLines(st, { includeMap = true } = {}) {
         }
     }
 
-    if (st?.battle?.in_battle === true) {
+    if (traceBattleActive(st)) {
         lines.push("- Battle: active");
     }
 
@@ -1118,6 +1226,11 @@ function summarizeVisualTracePayloadMarkdown(payload) {
     if (interruptedByMapTransition) outcomeNotes.push("Action sequence stopped because a map transition occurred; fetch a fresh observation before continuing.");
     if (interruptedAtIndex != null) outcomeNotes.push("Some queued commands were not executed after the interruption.");
     if (collisionStreak != null && interruptedByCollision) outcomeNotes.push("Repeated blocked movement was detected.");
+    for (const step of results) {
+        for (const note of genericTraceTransitionNotes(step)) {
+            if (!outcomeNotes.includes(note)) outcomeNotes.push(note);
+        }
+    }
     if (outcomeNotes.length) {
         lines.push("");
         lines.push("Outcome notes:");
@@ -1277,6 +1390,11 @@ function summarizeTracePayloadMarkdown(payload) {
     }
     if (interruptedByMapTransition) {
         notes.push("Map transition detected; remaining queued inputs were skipped so the next decision uses a fresh observation.");
+    }
+    for (const step of results) {
+        for (const note of genericTraceTransitionNotes(step)) {
+            if (!notes.includes(note)) notes.push(note);
+        }
     }
 
     const remainingLine = remainingCommandsSummaryLine(remaining);
@@ -1535,7 +1653,7 @@ function defineTools() {
     });
 
     const touchActionSchema = z.object({
-        type: z.literal("touch").describe("Nintendo DS touch action. Use only when a visible lower-screen UI is the right control; the top screen is visual-only and rejected for touch. A successful touch means input was delivered and/or visible effect was observed; it does not prove the intended semantic target was selected. For starter choices, naming, YES/NO, and other irreversible UI, verify the next screenshot before confirming."),
+        type: z.literal("touch").describe("Nintendo DS touch action. Use only when a visible lower-screen UI is the right control; the top screen is visual-only and rejected for touch. A successful touch means input was delivered and/or visible effect was observed; it does not prove the intended semantic target was selected. For naming, YES/NO, object selection, and other irreversible UI, verify the next screenshot before confirming."),
         x: z.number().describe("Touch X coordinate in the declared coordinate_space."),
         y: z.number().describe("Touch Y coordinate in the declared coordinate_space."),
         target_label: z.string().nullable().optional().describe("Optional human label for the intended visible target. The harness records it for attribution, but success still requires a later observation to prove the game state changed as intended."),
@@ -1554,13 +1672,6 @@ function defineTools() {
         explanation: z.string().describe("Why this text is being entered."),
     }).refine((action) => Boolean(action.value || action.text), {
         message: "type_text requires value or text",
-    });
-
-    const advanceDialogActionSchema = z.object({
-        type: z.literal("a_until_end_of_dialog").describe("HeartGold helper that presses A until the visible dialogue/text advances or free control returns. Use for long intro dialogue when repeated A is the intended action."),
-        frames: z.number().min(1).max(1800).nullable().optional().describe("Maximum frame budget for dialogue advancement."),
-        max_presses: z.number().min(1).max(40).nullable().optional().describe("Accepted Codex Desktop alias for a bounded number of A presses. Converted to an approximate frame budget when frames is omitted."),
-        explanation: z.string().nullable().optional().describe("Why repeated A is appropriate here."),
     });
 
     const addMarkerActionSchema = z.object({
@@ -1643,7 +1754,7 @@ function defineTools() {
     // Union of possible action schemas
     const actionSchemas = [
         keyPressActionSchema,
-        ...(config.isHeartGold ? [buttonSequenceActionSchema, waitActionSchema, touchActionSchema, typeTextActionSchema, advanceDialogActionSchema] : []),
+        ...(config.isHeartGold ? [buttonSequenceActionSchema, waitActionSchema, touchActionSchema, typeTextActionSchema] : []),
         ...(config.isHeartGold && config.observation.mode === "visual" ? [] : [addMarkerActionSchema]),
         writeMemoryActionSchema,
         deleteMemoryActionSchema,
@@ -1787,11 +1898,10 @@ async function handleToolCall(toolCall, gameDataJson, options = {}) {
                             console.warn(`WARN: Skipping key_press action ${i + 1} as one was already executed this turn.`);
                         } else {
                             const requestedFrames = Number(individualAction.frames);
-                            const usesDialogAdvance = normalizedKeys.includes("a_until_end_of_dialog");
                             const maxFrames = config.isHeartGold ? 1800 : 600;
                             const frames = Number.isFinite(requestedFrames) && requestedFrames > 0
                                 ? Math.min(maxFrames, Math.trunc(requestedFrames))
-                                : (config.isHeartGold && usesDialogAdvance ? 300 : 8);
+                                : 8;
                             const commandPayload = config.isHeartGold
                                 ? [heartGoldPressCommandFromKeys(normalizedKeys, frames)]
                                 : individualAction.keys;
@@ -1861,11 +1971,15 @@ async function handleToolCall(toolCall, gameDataJson, options = {}) {
                         actionResult.pythonResponse = response;
                         const reliability = heartGoldActionReliability(response);
                         const outcome = heartGoldButtonSequenceOutcome({ response, reliability, commandCount: commands.length });
-                        actionResult.success = outcome.success;
+                        const rawSuccess = heartGoldRawActionSuccess(response);
+                        actionResult.raw_success = rawSuccess;
+                        actionResult.benchmark_verified = outcome.success === true;
+                        actionResult.semantic_outcome = outcome.semanticOutcome;
+                        actionResult.success = rawSuccess;
                         actionResult.message = outcome.message;
                         actionResult.details_for_ai = summarizeTracePayloadMarkdown(response);
                         actionResult.details = "";
-                        if (!actionResult.success) overallSuccess = false;
+                        if (!rawSuccess) overallSuccess = false;
                         break;
                     }
 
@@ -1991,36 +2105,12 @@ async function handleToolCall(toolCall, gameDataJson, options = {}) {
                     }
 
                     case "a_until_end_of_dialog": {
-                        if (!config.isHeartGold) {
-                            actionResult.success = false;
-                            actionResult.message = "Error: a_until_end_of_dialog is only available in the HeartGold DS profile.";
-                            overallSuccess = false;
-                            break;
-                        }
-                        const requestedFrames = Number(individualAction.frames);
-                        const requestedMaxPresses = Number(individualAction.max_presses);
-                        const frameBudget =
-                            Number.isFinite(requestedFrames) && requestedFrames > 0 ? requestedFrames : null;
-                        const pressBudget =
-                            Number.isFinite(requestedMaxPresses) && requestedMaxPresses > 0 ? requestedMaxPresses * 48 : null;
-                        const derivedFrames =
-                            frameBudget != null && pressBudget != null
-                                ? Math.max(frameBudget, pressBudget)
-                                : frameBudget != null
-                                  ? frameBudget
-                                  : pressBudget != null
-                                    ? pressBudget
-                                    : 300;
-                        const frames = Math.min(1800, Math.max(1, Math.trunc(derivedFrames)));
-                        const response = await sendCommandsToPythonServer([{ type: "a_until_end_of_dialog", frames }]);
-                        actionResult.pythonResponse = response;
-                        const reliability = heartGoldActionReliability(response);
-                        const outcome = heartGoldDialogAdvanceOutcome({ response, reliability, frames });
-                        actionResult.success = outcome.success;
-                        actionResult.message = outcome.message;
-                        actionResult.details_for_ai = summarizeTracePayloadMarkdown(response);
-                        actionResult.details = "";
-                        if (!actionResult.success) overallSuccess = false;
+                        actionResult.success = false;
+                        actionResult.raw_success = false;
+                        actionResult.benchmark_verified = false;
+                        actionResult.message = "Error: a_until_end_of_dialog is not available in the HeartGold benchmark action surface. Use ordinary A/button inputs from the current observation.";
+                        actionResult.details = "No emulator input was sent.";
+                        overallSuccess = false;
                         break;
                     }
 
@@ -2553,8 +2643,10 @@ async function handleToolCall(toolCall, gameDataJson, options = {}) {
             const semantic = actionResultSemanticAttributes(res);
             const semanticSuccess = heartGoldActionSemanticSuccess(res, semantic);
             const rawSuccess = res.raw_success === undefined ? res.success === true : res.raw_success === true;
+            const benchmarkVerified = res.benchmark_verified === undefined ? null : res.benchmark_verified === true;
+            const benchmarkAttr = benchmarkVerified == null ? "" : ` benchmark_verified="${benchmarkVerified ? "true" : "false"}"`;
             return `
-    <action_result type="${xmlAttr(res.action_type)}" semantic_success="${semanticSuccess ? "true" : "false"}" raw_success="${rawSuccess ? "true" : "false"}" input_delivered="${booleanAttr(semantic.inputDelivered)}" visible_effect="${booleanAttr(semantic.visibleEffect)}" semantic_target_verified="${booleanAttr(semantic.semanticTargetVerified)}" semantic_outcome="${xmlAttr(semantic.semanticOutcome)}">
+    <action_result type="${xmlAttr(res.action_type)}" semantic_success="${semanticSuccess ? "true" : "false"}" raw_success="${rawSuccess ? "true" : "false"}" input_delivered="${booleanAttr(semantic.inputDelivered)}" visible_effect="${booleanAttr(semantic.visibleEffect)}" semantic_target_verified="${booleanAttr(semantic.semanticTargetVerified)}" semantic_outcome="${xmlAttr(semantic.semanticOutcome)}"${benchmarkAttr}>
       <message>${xmlEscape(safeMessage)}</message>
       ${safeDetails ? `<details>${xmlEscape(safeDetails)}</details>` : ""}
     </action_result>

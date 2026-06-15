@@ -92,6 +92,51 @@ DIRECTION_DELTAS = {
     "left": (-1, 0),
     "right": (1, 0),
 }
+OPPOSITE_DIRECTION = {
+    "up": "down",
+    "down": "up",
+    "left": "right",
+    "right": "left",
+}
+
+INTERACTABLE_STANDING_HARD_BLOCKED_TILES = {
+    0,   # wall
+    3,   # water, unless a future surf-aware use_from filter opts in
+    4,   # waterfall
+    10,  # runtime NPC/object blocker
+    11,  # generic interactive collision
+    14,  # PC
+    15,  # region map
+    16,  # television
+    18,  # bookshelf
+    21,  # trash can
+    22,  # shop shelf
+    25,  # out of bounds collision
+    33,  # boulder
+    35,  # cuttable tree
+    36,  # breakable rock
+    55,  # item ball
+    56,  # whirlpool
+    57,  # headbutt tree
+    66,  # temporary wall
+    67,  # locked door
+}
+INTERACTABLE_STANDING_AVOID_TILES = {
+    5, 6, 7, 8,  # ledges
+    9,           # warp
+    26, 27, 28, 29, 30, 31, 32,  # doors/ladders/stairs/warps
+}
+INTERACTABLE_BLOCKED_EDGES_BY_TILE = {
+    68: {"up"},
+    69: {"down"},
+    70: {"right"},
+    71: {"left"},
+    72: {"up", "right"},
+    73: {"up", "left"},
+    74: {"down", "right"},
+    75: {"down", "left"},
+}
+MAX_INTERACTABLE_REACHABILITY_CELLS = 20000
 
 FIELD_MOVE_AFFORDANCE_CONTRACT = "rom_derived_current_facing_field_move_affordances_v1"
 FIELD_MOVE_AFFORDANCE_BY_STATIC_TILE = {
@@ -2817,6 +2862,165 @@ def _static_grid_tile_at(minimap_data: Any, x: int, y: int) -> int | None:
         return int(row[col_index])
     except (TypeError, ValueError):
         return None
+
+
+def _static_grid_bounds(minimap_data: Any) -> tuple[int, int, int, int] | None:
+    if not isinstance(minimap_data, dict) or minimap_data.get("static_confidence") != "rom_derived":
+        return None
+    static_grid = minimap_data.get("static_grid")
+    if not isinstance(static_grid, list) or not static_grid:
+        return None
+    origin_x = safe_int(minimap_data.get("static_origin_x"), 0)
+    origin_y = safe_int(minimap_data.get("static_origin_y"), 0)
+    width = 0
+    for row in static_grid:
+        if isinstance(row, list):
+            width = max(width, len(row))
+    if width <= 0:
+        return None
+    return origin_x, origin_y, origin_x + width - 1, origin_y + len(static_grid) - 1
+
+
+def _interactable_standing_tile_passable(tile_code: int | None) -> bool:
+    if tile_code is None:
+        return False
+    if tile_code in INTERACTABLE_STANDING_HARD_BLOCKED_TILES:
+        return False
+    if tile_code in INTERACTABLE_STANDING_AVOID_TILES:
+        return False
+    return True
+
+
+def _interactable_edge_blocked(from_code: int | None, to_code: int | None, direction: str) -> bool:
+    blocked_from = INTERACTABLE_BLOCKED_EDGES_BY_TILE.get(from_code or -1)
+    if blocked_from and direction in blocked_from:
+        return True
+    entry_side = OPPOSITE_DIRECTION.get(direction)
+    blocked_to = INTERACTABLE_BLOCKED_EDGES_BY_TILE.get(to_code or -1)
+    return bool(entry_side and blocked_to and entry_side in blocked_to)
+
+
+def _dynamic_blocker_tiles(runtime_objects_visible: Any, player_x: int, player_y: int) -> set[tuple[int, int]]:
+    blockers: set[tuple[int, int]] = set()
+    if not isinstance(runtime_objects_visible, list):
+        return blockers
+    for obj in runtime_objects_visible:
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("isVisible") is not True and obj.get("visible") is not True:
+            continue
+        if obj.get("isBlocking") is not True and obj.get("blocking") is not True:
+            continue
+        x = safe_int(obj.get("x"), -1)
+        y = safe_int(obj.get("y"), -1)
+        if x < 0 or y < 0 or (x == int(player_x) and y == int(player_y)):
+            continue
+        blockers.add((x, y))
+    return blockers
+
+
+def _reachable_interactable_standing_tiles(
+    minimap_data: Any,
+    player_x: int,
+    player_y: int,
+    runtime_objects_visible: Any,
+) -> set[tuple[int, int]] | None:
+    bounds = _static_grid_bounds(minimap_data)
+    if bounds is None:
+        return None
+    min_x, min_y, max_x, max_y = bounds
+    start = (int(player_x), int(player_y))
+    if not (min_x <= start[0] <= max_x and min_y <= start[1] <= max_y):
+        return None
+    dynamic_blockers = _dynamic_blocker_tiles(runtime_objects_visible, player_x, player_y)
+
+    def tile_at(x: int, y: int) -> int | None:
+        if (x, y) in dynamic_blockers:
+            return 10
+        return _static_grid_tile_at(minimap_data, x, y)
+
+    visited: set[tuple[int, int]] = {start}
+    queue: list[tuple[int, int]] = [start]
+    index = 0
+    while index < len(queue) and len(visited) < MAX_INTERACTABLE_REACHABILITY_CELLS:
+        x, y = queue[index]
+        index += 1
+        from_code = tile_at(x, y)
+        for direction, (dx, dy) in DIRECTION_DELTAS.items():
+            nx = x + int(dx)
+            ny = y + int(dy)
+            if nx < min_x or ny < min_y or nx > max_x or ny > max_y:
+                continue
+            if (nx, ny) in visited:
+                continue
+            to_code = tile_at(nx, ny)
+            if not _interactable_standing_tile_passable(to_code):
+                continue
+            if _interactable_edge_blocked(from_code, to_code, direction):
+                continue
+            visited.add((nx, ny))
+            queue.append((nx, ny))
+    return visited
+
+
+def validate_interactable_use_from_tiles(
+    visible_interactables: Any,
+    minimap_data: Any,
+    runtime_objects_visible: Any,
+    player_x: int,
+    player_y: int,
+) -> Dict[str, Any]:
+    if not isinstance(visible_interactables, dict):
+        return visible_interactables if isinstance(visible_interactables, dict) else {}
+    reachable = _reachable_interactable_standing_tiles(
+        minimap_data,
+        player_x,
+        player_y,
+        runtime_objects_visible,
+    )
+    if reachable is None:
+        reachable = set()
+
+    def filtered_entry(entry: Any) -> Dict[str, Any] | None:
+        if not isinstance(entry, dict):
+            return None
+        item = dict(entry)
+        use_from = []
+        raw_tiles = item.get("useFrom") if isinstance(item.get("useFrom"), list) else []
+        for tile in raw_tiles:
+            if not isinstance(tile, dict):
+                continue
+            tx = safe_int(tile.get("x"), -1)
+            ty = safe_int(tile.get("y"), -1)
+            if tx < 0 or ty < 0 or (tx, ty) not in reachable:
+                continue
+            use_from.append(dict(tile))
+        use_from.sort(key=lambda tile: (abs(safe_int(tile.get("x"), 0) - int(player_x)) + abs(safe_int(tile.get("y"), 0) - int(player_y)), safe_int(tile.get("y"), 9999), safe_int(tile.get("x"), 9999)))
+        item["useFrom"] = use_from
+        return item
+
+    entries = [
+        item
+        for item in (filtered_entry(entry) for entry in visible_interactables.get("entries", []))
+        if item is not None
+    ]
+    raw_current = visible_interactables.get("current") if isinstance(visible_interactables.get("current"), dict) else None
+    current = filtered_entry(raw_current) if raw_current else None
+    if current and not any(
+        safe_int(current.get("x"), -1) == safe_int(entry.get("x"), -2)
+        and safe_int(current.get("y"), -1) == safe_int(entry.get("y"), -2)
+        and str(current.get("kind") or "") == str(entry.get("kind") or "")
+        for entry in entries
+    ):
+        current = None
+    if current is None:
+        current = next((entry for entry in entries if entry.get("inFrontOfPlayer") is True), None)
+    return {
+        **visible_interactables,
+        "entries": entries,
+        "visibleCount": len(entries),
+        "current": current,
+    }
 
 
 def field_move_affordances_from_minimap(
@@ -5742,6 +5946,13 @@ class HeartGoldBridge:
             player_x,
             player_y,
             str(resolved_position.get("facing") or ""),
+        )
+        visible_interactables = validate_interactable_use_from_tiles(
+            visible_interactables,
+            minimap_data,
+            npc_entries_visible,
+            player_x,
+            player_y,
         )
         visible_interactable_evidence = visible_interactable_view_evidence(
             rom_events,

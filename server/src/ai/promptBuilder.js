@@ -283,7 +283,7 @@ function formatReliabilityDetails(gameDataJson) {
       : "  <current_state>Use the current screenshot, model-owned memory/objectives, and sanitized prior action traces.</current_state>",
     isRamAssisted
       ? "  <ram_rule>Every gameplay RAM field shown here is current-state game information.</ram_rule>"
-      : "  <visual_rule>RAM-derived gameplay fields are not part of primary_visual gameplay.</visual_rule>",
+      : "  <visual_rule>primary_visual is not RAM+image benchmark play; missing RAM-derived gameplay state is not normal for ram_assisted.</visual_rule>",
   ];
 
   if (freshness && typeof freshness === "object") {
@@ -467,12 +467,7 @@ function formatProgressFlags(progress) {
     if (!hasOwn(key)) return null;
     return `${key}="${progress[key] === true ? "true" : "false"}"`;
   };
-  const attrs = [
-    `got_starter="${progress.got_starter === true ? "true" : "false"}"`,
-    `got_pokedex="${progress.got_pokedex === true ? "true" : "false"}"`,
-    `got_pokegear="${progress.got_pokegear === true ? "true" : "false"}"`,
-    `got_bag="${progress.got_bag === true ? "true" : "false"}"`,
-  ];
+  const attrs = [];
   for (const key of [
     "strength_enabled",
     "safari_zone_active",
@@ -495,7 +490,7 @@ function formatProgressFlags(progress) {
   if (Number.isInteger(progress.safari_zone_balls_remaining)) {
     attrs.push(`safari_zone_balls_remaining="${progress.safari_zone_balls_remaining}"`);
   }
-  if (progress.starter_species_name) attrs.push(`starter="${escapeXml(progress.starter_species_name)}"`);
+  if (!attrs.length) return `<progress_flags current_observation="not_shown" />\n`;
   return `<progress_flags ${attrs.join(" ")} />\n`;
 }
 
@@ -915,7 +910,7 @@ function formatVisibleInteractables(gameDataJson, exposure) {
   const coordinateFrame = playerCoordinateFrame(gameDataJson);
   const summary = surface.summary || {};
   const lines = [
-    `<visible_interactables count="${Number(summary.count ?? surface.entries.length) || 0}" visible_count="${surface.entries.length}">`,
+    `<visible_interactables count="${Number(summary.count ?? surface.entries.length) || 0}" visible_count="${surface.entries.length}" use_from_contract="current_reachable_validated_standing_tiles">`,
   ];
   if (surface.current) {
     const current = coordinatePointForPrompt(surface.current, coordinateFrame);
@@ -1001,7 +996,7 @@ async function buildUserInputText(gameDataJson) {
     ? `<player_location map="${escapeXml(pos.map_name)}" map_id="${escapeXml(pos.map_id)}" coordinate_mode="${escapeXml(coordinateFrame?.coordinateMode || "map_local_position")}" global_x="${escapeXml(coordinateFrame?.globalX ?? pos.x)}" global_y="${escapeXml(coordinateFrame?.globalY ?? pos.y)}" local_x="${escapeXml(coordinateFrame?.localX ?? pos.x)}" local_y="${escapeXml(coordinateFrame?.localY ?? pos.y)}" facing="${escapeXml(locationFacing)}" x="${pos.x}" y="${pos.y}" elevation="${Number(pos.elevation) || 0}" />`
     : locationValidated
       ? `<player_location map="${escapeXml(pos.map_name)}" map_id="${escapeXml(pos.map_id)}" coordinates="not_shown" />`
-      : `<player_location current_observation="not_shown">Use screenshot-first reasoning for position and movement.</player_location>`;
+      : `<player_location current_observation="not_shown">Harness observation defect: player position is missing from ram_assisted state.</player_location>`;
   const isInDialog = Boolean(gameDataJson?.is_talking_to_npc);
   const dialogueVisibleValidated = fieldShownInRamPrompt(exposure, "dialogue") || exposure.diagnosticsAllowed;
   const dialogText = String(gameDataJson?.open_dialog_text || "");
@@ -1138,15 +1133,15 @@ async function buildUserInputText(gameDataJson) {
     pathfindingEnabled && mapBounds
       ? " ROM static collision is loaded for same-map path_to_location execution; full geometry and generated routes are not printed as player-visible map knowledge."
       : pathfindingEnabled && !staticGridAvailable
-        ? " No ROM static collision grid is loaded for this map; path_to_location is disabled rather than using observed fog as if it were a full map. Prefer screenshot-guided button_sequence for visible paths."
+        ? " No ROM static collision grid is loaded for this map; path_to_location is disabled rather than using observed fog as if it were a full map."
       : "";
   const pathfindingReason = navigationValidated
     ? (!romCollisionValidated
-        ? "path_to_location is disabled for this observation because same-map collision data is not available. Use screenshot-guided key_press/touch actions for visible paths."
+        ? "path_to_location is disabled for this observation because same-map collision data is not available."
         : pythonPathfindingDisabled
         ? `path_to_location is disabled for this observation: ${pathfindingContract?.disabledReason || "unknown"}`
         : `navigation available.${pathfindingBoundsText}`)
-    : "path_to_location is disabled for this observation. Use screenshot-first key_press/touch actions.";
+    : "path_to_location is disabled because navigation state is missing. In ram_assisted overworld play this is a harness observation defect, not an alternate play mode.";
   const partySection =
     fieldShownInRamPrompt(exposure, "party") || exposure.diagnosticsAllowed
       ? formatPokemonTeam(gameDataJson?.current_pokemon_data, gameDataJson?.ram_assisted?.party)
@@ -1282,7 +1277,7 @@ async function buildUserInputText(gameDataJson) {
     : `<markers current_observation="not_shown">Coordinate markers are unavailable until the current observation shows map identity and position.</markers>\n`;
   const situationStatus = visualPrimary
     ? `
-  <screen_mode_hint>Determine overworld/dialogue/menu/battle/loading/naming from the DS screenshot. The screenshot is a vertical DS layout: top screen above bottom screen. The persistent bottom-screen MENU/CHECK panel is standby UI, not an open menu unless a real modal menu/touch prompt is visible. RAM gameplay fields are not shown in primary_visual.</screen_mode_hint>
+  <screen_mode_hint>Determine overworld/dialogue/menu/battle/loading/naming from the synchronized DS screenshot plus exposed RAM state. The screenshot is a vertical DS layout: top screen above bottom screen. The persistent bottom-screen MENU/CHECK panel is standby UI, not an open menu unless a real modal menu/touch prompt is visible. RAM gameplay fields are not optional in ram_assisted benchmark play.</screen_mode_hint>
   <path_to_location status="disabled">Not available in primary_visual; navigate from screenshot, memory, objectives, and action traces.</path_to_location>`
     : `
   <path_to_location status="${escapeXml(pathfindingStatus)}">${escapeXml(pathfindingReason)}</path_to_location>
@@ -1368,11 +1363,11 @@ ${formatMemoryStructured(state.memory)}
 ${markersSection}
 
 <visible_area>
-${!navigationValidated ? "Current map grid is not shown in this observation. Use the screenshot for movement." : isInDialog ? "Not visible in dialogue" : gameAreaDisplay || "No visible area data"}
+${!navigationValidated ? "Current map grid is not shown; in ram_assisted overworld play this is a harness observation defect, not an alternate observation mode." : isInDialog ? "Not visible in dialogue" : gameAreaDisplay || "No visible area data"}
 </visible_area>
 
 <explored_map>
-${!navigationValidated ? "Current minimap geometry is not shown in this observation. path_to_location is disabled." : isInDialog ? "Not visible in dialogue" : minimapDisplay || "No minimap data"}
+${!navigationValidated ? "Current minimap geometry is not shown; in ram_assisted overworld play this is a harness observation defect, not an alternate observation mode." : isInDialog ? "Not visible in dialogue" : minimapDisplay || "No minimap data"}
 </explored_map>
 
 </game_state>
@@ -1409,7 +1404,7 @@ async function buildDeveloperPrompt() {
 The configured prompt file could not be read for this observation, so the last successfully loaded prompt text is being reused. Treat this as a harness asset warning, not as game evidence.
 `;
     } else {
-      gamePrompt = "You are an AI playing Pokemon HeartGold through the local game interface. Codex Desktop `ram_assisted` is the current-state game lane when configured. Use the DS screenshot, exposed RAM-assisted state, memory, objectives, and the execute_action schema. Do not inspect the repo, console logs, local files, local search results, runtime folders, hidden runtime files, or monitor-only artifacts for gameplay. Use PowerShell/Invoke-RestMethod only for official local endpoint transport; no `rg`, grep, file-read, repo browsing, or local-search commands are allowed for gameplay information. A generic HeartGold prompt is being used because the configured prompt asset is unavailable.";
+      gamePrompt = "You are an AI playing Pokemon HeartGold through the local game interface. Codex Desktop `ram_assisted` is the current-state RAM+image game lane when configured. Use the synchronized DS screenshot, exposed RAM-assisted state, memory, objectives, and the execute_action schema. Do not inspect the repo, console logs, local files, local search results, runtime folders, hidden runtime files, or monitor-only artifacts for gameplay. Use PowerShell/Invoke-RestMethod only for official local endpoint transport; no `rg`, grep, file-read, repo browsing, or local-search commands are allowed for gameplay information. A generic HeartGold prompt is being used because the configured prompt asset is unavailable.";
     }
   }
   if (config.isHeartGold) {
@@ -1421,7 +1416,7 @@ A bounded RAM-observed fog minimap is available when <navigation_state available
 - Known wall/collision tiles are blocked.
 - Known visited tiles are walkable for reasoning, but path_to_location itself requires a ROM-derived static collision grid.
 - Unknown fog tiles are not used by path_to_location as a substitute for full map geometry.
-- Use \`path_to_location\` as a same-map actuator, not a route oracle: it may only move toward explicitly shown current-map map_id/coordinates when its prompt status is enabled. If <path_to_location status="disabled"> appears, use screenshot-guided \`key_press\` or \`touch\` actions instead.
+- Use \`path_to_location\` as a same-map actuator, not a route oracle: it may only move toward explicitly shown current-map map_id/coordinates when its prompt status is enabled.
 
 ## HEARTGOLD OBSERVATION POLICY
 

@@ -6,8 +6,10 @@ Your response must start with `<self_criticism>` and end with `</self_criticism>
 
 HeartGold-specific rules:
 - This is Gen 4: physical/special is per move, not per type.
-- The profile may be screenshot-first. Do not criticize lack of RAM/minimap unless the model ignored visible screenshot evidence.
-- Pathfinding/minimap may be unavailable. Good screenshot-guided movement is acceptable.
+- The benchmark profile requires RAM and image together as one synchronized observation.
+- Missing, stale, or contradictory current-state RAM+image data is a harness observation defect. Do not normalize it as acceptable gameplay.
+- Pathfinding/minimap may be unavailable only when the current screen is not an overworld navigation screen. If overworld navigation is possible and those fields are missing, call it out as harness surface loss.
+- Do not require first-hand manual observation of every possible game state. Criticize failures at the generic primitive level: map/collision/object/text/menu/battle/action-result contracts.
 - Touch input should be used only when the bottom-screen UI clearly benefits from it.
 
 <self_criticism>

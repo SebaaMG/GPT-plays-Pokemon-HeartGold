@@ -202,7 +202,6 @@ function actionOutputSchema(exposure = null, gameDataJson = null) {
                       "r",
                       "start",
                       "select",
-                      "a_until_end_of_dialog",
                       "face_up",
                       "face_down",
                       "face_left",
@@ -286,47 +285,8 @@ function normalizeAction(action) {
   return normalized;
 }
 
-function isDialogLikeText(text) {
-  return /\b(dialog|dialogue|text box|text page|narration|intro|oak|professor|advance|clearing|clear)\b/i.test(
-    String(text || "")
-  );
-}
-
-function isMenuLikeText(text) {
-  const value = String(text || "").toLowerCase();
-  if (/\b(no visible (choice|menu)|no (choice|menu)|without a (choice|menu))\b/.test(value)) {
-    return false;
-  }
-  return /\b(visible (choice|menu|option)|choice screen|menu screen|choose|select|option screen|lower-screen target|control info|adventure info|no info needed|gender selection|boy|girl|portrait|highlighted|naming keyboard|keyboard|yes|no)\b/i.test(value);
-}
-
 function normalizeHeartGoldAction(action, actionPayload) {
   const normalized = normalizeAction(action);
-  if (!config.isHeartGold) return normalized;
-
-  const reasoningText = `${actionPayload?.step_details || ""}\n${actionPayload?.chat_message || ""}`;
-  const isSingleA =
-    normalized.type === "key_press" &&
-    Array.isArray(normalized.keys) &&
-    normalized.keys.length === 1 &&
-    String(normalized.keys[0]).toLowerCase() === "a";
-
-  if (isSingleA && isDialogLikeText(reasoningText) && !isMenuLikeText(reasoningText)) {
-    normalized.keys = ["a_until_end_of_dialog"];
-    if (!normalized.frames || normalized.frames < 90) normalized.frames = 90;
-  }
-
-  const usesDialogAdvance =
-    normalized.type === "key_press" &&
-    Array.isArray(normalized.keys) &&
-    normalized.keys.length === 1 &&
-    String(normalized.keys[0]).toLowerCase() === "a_until_end_of_dialog";
-
-  if (usesDialogAdvance && isMenuLikeText(reasoningText)) {
-    normalized.keys = ["a"];
-    normalized.frames = 8;
-  }
-
   return normalized;
 }
 
@@ -412,17 +372,10 @@ function buildPrompt(apiInput, gameDataJson, modelImage = null) {
     "Use the attached screenshot plus the structured state/history below.",
     "Return exactly one JSON object matching the provided schema.",
     "For each action object, fill irrelevant fields with null.",
-    "Use key_press for normal Nintendo DS controls. Use touch for visible lower-screen targets when it is faster or clearer than buttons.",
+    "The action schema defines the available Nintendo DS controller, touch, and helper inputs.",
     "The attached DS image may be nearest-neighbor upscaled for readability. Raw full-screen coordinates are still 256x384 and bottom-screen touch coordinates are still 256x192. If you choose coordinates directly from the attached model image, set coordinate_space \"model_scaled\", screen \"full\", and include source_width/source_height from GAME_CONTEXT.model_image.",
-    "Use type_text with value \"GPT\" on the player naming keyboard instead of manually tapping letter coordinates.",
-    "For HeartGold YES/NO confirmations and naming-screen OK, prefer D-pad/A over touch unless button navigation clearly failed.",
-    "For visible HeartGold dialog/text boxes, prefer key_press with keys [\"a_until_end_of_dialog\"] over repeated single A turns.",
-    "For a visible choice/menu, use D-pad/A or touch the visible lower-screen target, whichever is clearer.",
     "Use only the attached screenshot, decoded current game state, recent history, memory/objectives, and the action schema as gameplay knowledge.",
-    "Treat fields labeled unknown, candidate, partial, inferred, or heuristic as uncertain and verify them against the screenshot before acting on them.",
-    "If X does not open the start menu after one or two attempts in the early bedroom sequence, continue the story and set Text Speed later when menu access is actually available.",
-    "The HeartGold bootstrap has already dismissed the CONTROL INFO / ADVENTURE INFO / NO INFO NEEDED menu. If Professor Oak or intro narration is visible, keep advancing it; do not try to pick NO INFO NEEDED again.",
-    "If that initial menu ever appears again, buttons need three separated Down presses then A because the first Down only activates focus on CONTROL INFO.",
+    "Treat fields labeled unknown, candidate, partial, inferred, or heuristic as uncertain current-state evidence.",
     "",
     "<GAME_CONTEXT>",
     JSON.stringify(sanitizeModelValue(buildBenchmarkContext(gameDataJson, modelImage)), null, 2),

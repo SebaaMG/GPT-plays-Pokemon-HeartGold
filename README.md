@@ -23,14 +23,41 @@ This project connects a model to Pokémon HeartGold through a small local stack:
 | Agent server | `server/` | Serves observation and action endpoints |
 | Dashboard | `frontend/` | Shows what the agent is seeing and doing |
 
-The main observation mode is `ram_assisted`: each response contains the current DS screenshot and a decoded RAM snapshot from that same moment. During overworld play, that means map, position, facing, nearby collisions/objects, and visible text. If a menu or battle is open, the RAM snapshot reflects that screen instead.
+The main observation mode is `ram_assisted`: each response must contain the current DS screenshot and a decoded RAM snapshot from that same moment. This is a single synchronized observation surface, not a degraded secondary mode. During overworld play, that means map, position, facing, nearby collisions/objects, interactable affordances, and current screen/text state. If a menu or battle is open, the RAM+image observation must describe that screen as the playable state.
+
+### RAM+Image Contract
+
+- The model plays from one current observation: screenshot plus decoded RAM from the same emulator moment.
+- RAM is the structured game-state sensor; the screenshot is the rendered visual sensor. Both are primary evidence.
+- Missing, stale, contradictory, or non-current gameplay state is a harness defect, not a model strategy problem and not a benchmark-comparable turn.
+- Do not add story-route or objective oracles to compensate for weak observation. Fix the generic observation/action contract instead.
+- The harness should expose engine-level facts a player can experience: position, facing, map, collision, visible objects, current screen/text/menu/battle state, action interruption, and final state after input.
+- The harness should not expose walkthrough labels such as "starter selector" unless the game itself displays that label to the player.
+
+### Engine-Level Validation
+
+The harness must be validated by general contracts, not by manually observing every possible story state first-hand.
+
+- ROM/map/event decoders should provide generic map, collision, object, text/menu/battle, and action-result primitives across the game.
+- Tests should assert invariants over those primitives: synchronized RAM+image timestamps, reachable `use_from` tiles, consistent position/facing, current text/menu state for active screens, action interruption reporting, and no stale snapshots.
+- A new map, NPC, dialog, or menu should work because it uses the same primitives, not because the harness has a one-off rule for that exact state.
+- If a model discovers a bad affordance or misleading state during play, the fix should improve the generic primitive or invariant that produced it.
+- Manual live runs are smoke tests for model comprehension and integration, not the only way to prove each state works.
+
+See [AGENTS.md](AGENTS.md) for persistent agent rules and [TODO.md](TODO.md) for the current contract-hardening backlog.
+
+### Prompting And Compaction Guardrails
+
+For GPT-5.5 benchmark agents, keep stable harness rules in persistent instructions and keep dynamic observations/action history separate. Tool-specific guidance should live in tool schemas/descriptions where possible, and compacted sessions must preserve completed actions, active assumptions, tool outcomes, unresolved blockers, and the next concrete goal.
+
+Reference: [OpenAI GPT-5.5 prompt guidance](https://developers.openai.com/api/docs/guides/prompt-guidance).
 
 ## Core Features
 
 - Live BizHawk/NDS bridge for screen capture, RAM reads, controller input, and memory-domain detection.
 - HeartGold RAM decoders for map state, text/dialog, battles, menus, party/inventory, PC storage, and progress systems.
 - OpenAI API, Codex Desktop, and Codex CLI support through the same local observation/action server.
-- Action helpers for movement, touch input, dialog advancement, and path-to-location attempts.
+- Action surface for DS buttons, touch input, text entry, waits, memory/objectives, and same-map `path_to_location` attempts.
 - Benchmark metrics for steps, actions, map transitions, unique maps, battles, progress, deadlock signals, and run comparability.
 - PowerShell scripts for startup, shutdown, reset, smoke tests, and validation.
 
@@ -90,9 +117,11 @@ First fetch:
 GET http://127.0.0.1:9885/codexDesktop/observation
 
 Read the returned observation and continue from it.
+
+Run target: keep playing until the first rival battle starts. Stop only if the local interface itself returns an explicit concrete blocker, harness error, or ok:false that prevents further observation/input. Do not end the run because you are uncertain, lost, or out of ideas; if the interface still accepts observations/actions, keep playing from RAM+image.
 ```
 
-The returned observation includes the runtime prompt, current screenshot, decoded RAM state, recent history, and action schema.
+The returned observation includes the runtime prompt, current screenshot, decoded RAM state, recent history, and action schema. In `ram_assisted`, that surface must be complete enough to play from RAM+image directly; a visual-only or RAM-missing response is a harness observation failure, not normal gameplay.
 
 </details>
 
@@ -145,6 +174,8 @@ powershell -ExecutionPolicy Bypass -File scripts\reset-heartgold-benchmark.ps1
 
 The player surface contains the current screenshot, decoded RAM state, recent history, memory/objectives, and the action schema.
 
+The screenshot and decoded RAM are paired. The model should not treat them as unrelated sources or as substitutes for each other. If the image says one current state and RAM says another, or if an expected current-state field is missing for the active screen, the correct outcome is to flag a harness observation defect.
+
 In Codex Desktop mode, the player receives that surface from `GET /codexDesktop/observation`, including `model_input.operator_prompt` and `model_input.user_input_text`. In Codex CLI and OpenAI API modes, the server builds the same gameplay prompt/action context internally before asking the selected model for the next action.
 
 ## Dashboard
@@ -184,6 +215,8 @@ powershell -ExecutionPolicy Bypass -File scripts\smoke-heartgold-stack.ps1
 powershell -ExecutionPolicy Bypass -File scripts\test-heartgold-actions.ps1
 powershell -ExecutionPolicy Bypass -File scripts\test-heartgold-pathfinding.ps1
 ```
+
+Validation should include contract/invariant checks over saved observations and ROM-derived map data, not only ad hoc live playthroughs. A successful live route to one milestone is evidence of integration, not proof that the whole harness works.
 
 ## License
 

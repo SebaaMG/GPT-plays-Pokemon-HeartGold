@@ -76,7 +76,7 @@ function buildDegradedVisualGameData(bridgeHealth) {
       title: "Pokemon HeartGold",
       platform: "Nintendo DS",
       observationMode: "visual",
-      stateReliability: "visual_degraded_bridge_fallback",
+      stateReliability: "harness_observation_failure_missing_structured_ram",
     },
     observationPolicy: {
       mode: "visual",
@@ -108,9 +108,10 @@ function buildDegradedVisualGameData(bridgeHealth) {
       visualAvailable: true,
     },
     harnessDiagnostics: {
+      harnessObservationFailure: true,
       degradedVisualOnly: true,
       requestDataOk: false,
-      requestDataError: "Python bridge did not return structured game data; using visual-only degraded observation fallback.",
+      requestDataError: "Python bridge did not return a complete RAM+image gameplay observation.",
     },
   };
 }
@@ -185,7 +186,7 @@ function compactActionFormat() {
     transport: {
       observe: `GET http://127.0.0.1:${config.wsPort}/codexDesktop/observation`,
       act: `POST http://127.0.0.1:${config.wsPort}/codexDesktop/action?include_next_observation=1`,
-      continue_from: "next_observation when present; GET observation again only as fallback",
+      continue_from: "next_observation when present; if transport omits it, recover with a fresh GET before deciding again",
     },
     envelope_required_fields: ["actions"],
     envelope_optional_fields: ["step_details", "chat_message", "avatar_emotion"],
@@ -519,7 +520,6 @@ const LOW_STALL_PREACTION_ACTION_TYPES = new Set([
   "key_press",
   "button_sequence",
   "wait",
-  "a_until_end_of_dialog",
   "type_text",
 ]);
 
@@ -1291,10 +1291,6 @@ function modelVisibleProgressFlagsSurface(progressFlags) {
   if (!progressFlags || typeof progressFlags !== "object" || Array.isArray(progressFlags)) return {};
   if (progressFlagsValidated(progressFlags)) return whitelistedProgressFlags(progressFlags);
   const allowed = [
-    "got_starter",
-    "got_pokedex",
-    "got_pokegear",
-    "got_bag",
     "strength_enabled",
     "flash_active",
     "defog_active",
@@ -1302,7 +1298,6 @@ function modelVisibleProgressFlagsSurface(progressFlags) {
     "safari_zone_has_step_limit",
     "safari_zone_steps_remaining",
     "safari_zone_balls_remaining",
-    "starter_species_name",
   ];
   const out = {};
   for (const key of allowed) {
@@ -1327,10 +1322,6 @@ function progressFlagsValidated(progressFlags) {
 function whitelistedProgressFlags(progressFlags) {
   if (!progressFlagsValidated(progressFlags)) return {};
   const out = {
-    got_starter: progressFlags.got_starter === true,
-    got_pokedex: progressFlags.got_pokedex === true,
-    got_pokegear: progressFlags.got_pokegear === true,
-    got_bag: progressFlags.got_bag === true,
     strength_enabled: progressFlags.strength_enabled === true,
     safari_zone_active: progressFlags.safari_zone_active === true,
     safari_zone_has_step_limit: progressFlags.safari_zone_has_step_limit === true,
@@ -1343,7 +1334,6 @@ function whitelistedProgressFlags(progressFlags) {
     flash_active: progressFlags.flash_active === true,
     defog_active: progressFlags.defog_active === true,
   };
-  if (progressFlags.starter_species_name != null) out.starter_species_name = String(progressFlags.starter_species_name);
   return out;
 }
 
@@ -2795,18 +2785,18 @@ function operatorPrompt() {
     "Do not inspect repository files, runtime JSON, Lua/Python internals, savestates, RAM dumps, screenshots outside model_input.image, or monitor-only artifacts to decide what to do in-game.",
     "Monitor-only artifacts are allowed only to report an interface failure, not to choose gameplay actions.",
     "Do not decide from truncated PowerShell object formatting. Assign endpoint results to variables and inspect model_input.image, model_input.user_input_text, model_input.decoded_ram, recent reasoning/history, and the action schema.",
-    "For each turn, inspect the current official screenshot/state surface, submit one execute_action JSON object to /codexDesktop/action?include_next_observation=1, then continue from the returned next_observation. If next_observation is missing, GET /codexDesktop/observation as a fallback.",
+    "For each turn, inspect the current official RAM+image observation surface, submit one execute_action JSON object to /codexDesktop/action?include_next_observation=1, then continue from the returned next_observation. If next_observation is missing, recover transport with GET /codexDesktop/observation before deciding again.",
     "Use generous local timeouts: about 30-45s for GET observation and 90s for POST action with include_next_observation. If a POST action times out, do not repeat the same input first; GET a fresh observation to see whether the input already happened.",
     "Transport silence: Do not narrate routine observation/action transport in the Codex conversation. Endpoint calls are only I/O; speak there only for meaningful gameplay expression, a decision you want to record, or an interface failure.",
     "Do not turn observation refresh into an in-game objective. Observing is interface I/O, not something the player character is trying to accomplish.",
-    "Do not use a_until_end_of_dialog just because text is missing. Use it only when the official image/text clearly shows already-read low-information dialogue; if the official image cannot be viewed, stop and report an observation failure.",
+    "Do not classify normal gameplay uncertainty, failed guesses, or lack of a plan as a run blocker. Stop only for an explicit local interface blocker, harness error, or ok:false that prevents observation/input; otherwise keep playing from RAM+image and action results.",
+    "Do not ask for first-hand manual validation of every possible state. The RAM+image interface is expected to generalize through engine-level map, collision, object, text/menu/battle, and action-result primitives.",
     "Return one execute_action arguments object with an actions array. step_details, chat_message, and avatar_emotion are optional player-authored continuity/commentary fields for meaningful gameplay expression; routine endpoint transport needs no narration.",
     "Use button_sequence for sequential movement such as Down, Down, Left. key_press is simultaneous input, not a sequence.",
-    "On the Pokemon HeartGold title screen or a visible 'Touch to Start' prompt, press Start first with key_press keys:[\"start\"]. Do not assume touch is required there.",
-    "Prefer DS buttons for dialogue and menus; use touch only for clearly visible lower-screen targets or when faster.",
+    "Use the execute_action schema for available controls and coordinate spaces.",
     "The attached HeartGold model image may be scaled up for readability. Raw DS coordinates are still 256x384: top screen y=0..191, bottom touch screen y=192..383. Default touch coordinates are bottom-local 256x192. If you choose a point from the attached scaled bitmap, use touch coordinate_space=\"model_scaled\", screen=\"full\", and source_width/source_height from model_input.image.",
-    "In ram_assisted mode, decoded current RAM gameplay state shown in model_input.user_input_text and model_input.decoded_ram is part of the gameplay observation. Use the current decoded state together with the screenshot.",
-    "If the screenshot is stale/unavailable, stop and classify it as a harness observation failure instead of guessing.",
+    "In ram_assisted mode, model_input.image, model_input.user_input_text, and model_input.decoded_ram are one synchronized RAM+image gameplay observation. Use them together as the current game state.",
+    "If screenshot, decoded RAM, or current screen/text/menu state is stale, missing, or contradictory, stop and classify it as a harness observation failure instead of guessing.",
   ].join("\n");
 }
 
@@ -2998,8 +2988,112 @@ function cloneDecodedRamSnapshot(gameDataJson) {
 }
 
 function buildModelDecodedRam(gameDataJson, exposure) {
-  void exposure;
-  return cloneDecodedRamSnapshot(gameDataJson);
+  const pos = gameDataJson?.current_trainer_data?.position || {};
+  const coordinateFrame = playerCoordinateFrame(gameDataJson);
+  const screenPhase = compactScreenPhase(gameDataJson, exposure);
+  const movement = gameDataJson?.ram_assisted?.modeDetector?.movement || {};
+  const menu = gameDataJson?.ram_assisted?.modeDetector?.menu || null;
+  const naming = gameDataJson?.naming_state || gameDataJson?.ram_assisted?.modeDetector?.naming || null;
+  const progressFlags = gameDataJson?.progress_flags && typeof gameDataJson.progress_flags === "object"
+    ? gameDataJson.progress_flags
+    : null;
+  const runtimeObjectSurface = validatedRuntimeObjectSurface(gameDataJson, exposure);
+  const currentConnectionsData = gameDataJson?.current_connections && typeof gameDataJson.current_connections === "object"
+    ? gameDataJson.current_connections
+    : gameDataJson?.ram_assisted?.current_connections && typeof gameDataJson.ram_assisted.current_connections === "object"
+      ? gameDataJson.ram_assisted.current_connections
+      : null;
+  const fieldMoveAffordancesData =
+    gameDataJson?.field_move_affordances && typeof gameDataJson.field_move_affordances === "object"
+      ? gameDataJson.field_move_affordances
+      : gameDataJson?.ram_assisted?.fieldMoveAffordances && typeof gameDataJson.ram_assisted.fieldMoveAffordances === "object"
+        ? gameDataJson.ram_assisted.fieldMoveAffordances
+        : null;
+  const exposeDecoded = exposeAllDecodedRamForModel(exposure);
+  const navigationVisible = shouldExposeDecodedNavigation(exposure);
+  const navigationCoordinatesVisible = exposure?.navigation?.validated === true || exposeDecoded;
+  const facingVisible = shouldExposeDecodedField(exposure, "facing");
+  const currentText = validatedCurrentVisibleText(gameDataJson);
+  const recentText = Array.isArray(gameDataJson?.recent_visible_text)
+    ? gameDataJson.recent_visible_text.filter((item) => isValidatedRecentVisibleText(item, gameDataJson)).slice(-6)
+    : [];
+  const collisionVisible =
+    shouldExposeDecodedField(exposure, "romCollision") &&
+    shouldExposeDecodedNavigation(exposure) &&
+    gameDataJson?.ram_assisted?.pathfinding?.available === true;
+
+  return pruneEmptyDecodedRam({
+    schema: "heartgold_model_decoded_ram_surface_v1",
+    contract: "current_gameplay_ram_primitives_no_raw_oracles_v1",
+    observation: {
+      mode: exposure?.mode || gameDataJson?.observationPolicy?.mode || "ram_assisted",
+      screen_phase: screenPhase,
+      screenshot: {
+        fresh: gameDataJson?.observationFreshness?.screenshotFresh ?? gameDataJson?.screenshotFresh ?? null,
+        hash: gameDataJson?.observationFreshness?.screenshotHash || gameDataJson?.screenshotHash || null,
+        ageMs: gameDataJson?.observationFreshness?.screenshotAgeMs ?? gameDataJson?.screenshotAgeMs ?? null,
+      },
+      visual_prompt_without_ram_text: visualPromptWithoutRamText(gameDataJson),
+    },
+    player: navigationVisible
+      ? modelVisiblePositionSurface(pos, coordinateFrame, facingVisible, navigationCoordinatesVisible)
+      : null,
+    movement: shouldExposeDecodedField(exposure, "movement")
+      ? {
+          mode: gameDataJson?.player_movement_mode || movement.mode || "UNKNOWN",
+          vehicle: movement.vehicle || null,
+          surfing: movement.surfing === true,
+          biking: movement.biking === true,
+          bikeType: movement.bikeType || null,
+          diving: movement.diving === true,
+        }
+      : null,
+    collision_grid: collisionVisible ? sanitizeCollisionGridForModel(gameDataJson) : null,
+    visibility: shouldExposeDecodedField(exposure, "visibility") ? sanitizeVisibilityForModel(gameDataJson) : null,
+    field_move_affordances:
+      shouldExposeDecodedField(exposure, "fieldMoveAffordances") && navigationVisible
+        ? sanitizeFieldMoveAffordancesForModel(fieldMoveAffordancesData)
+        : null,
+    current_visible_text: currentText ? modelVisibleValidatedTextSurface(currentText) : null,
+    recent_visible_text: recentText.map(modelVisibleValidatedTextSurface).filter(Boolean),
+    menu: shouldExposeDecodedField(exposure, "menu") ? modelVisibleMenuSurface(menu) : null,
+    naming: shouldExposeDecodedField(exposure, "naming") ? modelVisibleNamingSurface(naming) : null,
+    battle: shouldExposeDecodedField(exposure, "battle") ? modelVisibleBattleSurface(gameDataJson) : null,
+    party: shouldExposeDecodedField(exposure, "party") ? modelVisiblePartySurface(gameDataJson) : null,
+    inventory: shouldExposeDecodedField(exposure, "inventory") ? modelVisibleInventorySurface(gameDataJson?.inventory_data) : null,
+    pc_storage: shouldExposeDecodedField(exposure, "pcStorage") ? modelVisiblePcStorageSurface(gameDataJson?.pc_data) : null,
+    money: shouldExposeDecodedField(exposure, "money") ? gameDataJson?.current_trainer_data?.money ?? null : null,
+    badges: shouldExposeDecodedField(exposure, "badges")
+      ? {
+          count: gameDataJson?.current_trainer_data?.badge_count ?? null,
+          total: gameDataJson?.current_trainer_data?.badge_total ?? 16,
+          badges: gameDataJson?.current_trainer_data?.badges || null,
+        }
+      : null,
+    field_state_flags: shouldExposeDecodedField(exposure, "progress")
+      ? modelVisibleProgressFlagsSurface(progressFlags)
+      : null,
+    runtime_objects: shouldExposeDecodedField(exposure, "npcs")
+      ? runtimeObjectSurface.validated === true
+        ? sanitizeRuntimeObjectsForModel(gameDataJson, exposure)
+        : exposeDecoded
+          ? decodedRuntimeObjectsForModel(gameDataJson)
+          : null
+      : null,
+    visible_warps: shouldExposeDecodedField(exposure, "warps") && navigationVisible
+      ? sanitizeVisibleWarpsForModel(gameDataJson?.visible_warps, gameDataJson)
+      : null,
+    visible_interactables: shouldExposeDecodedField(exposure, "interactables") && navigationVisible
+      ? exposure?.fields?.interactables?.validated === true && exposure?.navigation?.validated === true
+        ? sanitizeVisibleInteractablesForModel(gameDataJson, exposure)
+        : exposeDecoded
+          ? decodedVisibleInteractablesForModel(gameDataJson)
+          : null
+      : null,
+    current_connections: shouldExposeDecodedField(exposure, "currentConnections") && navigationVisible
+      ? sanitizeCurrentConnectionsForModel(currentConnectionsData)
+      : null,
+  });
 }
 
 function compactObjectives() {
@@ -3814,7 +3908,7 @@ function compactVisibleInteractableLines(gameDataJson, exposure) {
   const coordinateFrame = playerCoordinateFrame(gameDataJson);
   const decodedSurface = surface.validated === true ? surface : decodedVisibleInteractablesForModel(gameDataJson);
   const entries = Array.isArray(decodedSurface.entries) ? decodedSurface.entries : [];
-  const lines = [`Visible interactables/check targets (${entries.length}):`];
+  const lines = [`Visible interactables/check targets (${entries.length}; use_from lists only currently reachable validated standing tiles when present):`];
   const current = decodedSurface.current;
   if (current) {
     lines.push(`- current facing target: ${current.kind || "check"} ${compactCoordinatePointText(current, coordinateFrame)}`);
@@ -3834,6 +3928,102 @@ function compactVisibleInteractableLines(gameDataJson, exposure) {
   return lines;
 }
 
+function xmlAttrs(attrs) {
+  return Object.entries(attrs || {})
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}="${escapeXml(value)}"`)
+    .join(" ");
+}
+
+function compactPlayerLocationXmlLine(gameDataJson, exposure) {
+  const decodedNavigation = shouldExposeDecodedNavigation(exposure);
+  const pos = gameDataJson?.current_trainer_data?.position || {};
+  const coordinateFrame = playerCoordinateFrame(gameDataJson);
+  const facing = shouldExposeDecodedField(exposure, "facing") ? pos.facing || "unknown" : "not_shown";
+  const attrs = {
+    map: pos.map_name || "unknown",
+    map_id: pos.map_id ?? pos.mapId ?? "",
+    coordinate_mode: coordinateFrame.coordinateMode || "map_local_position",
+    facing,
+  };
+  if (decodedNavigation && (exposure.navigation?.validated === true || exposeAllDecodedRamForModel(exposure))) {
+    const point = coordinatePointForSurface(pos, coordinateFrame);
+    attrs.x = point.x ?? "";
+    attrs.y = point.y ?? "";
+    attrs.local_x = point.localX ?? "";
+    attrs.local_y = point.localY ?? "";
+    const elevation = pos.elevation ?? pos.z;
+    if (Number.isFinite(Number(elevation))) attrs.elevation = Math.trunc(Number(elevation));
+  } else {
+    attrs.coordinates = "not_shown";
+  }
+  return `  <player_location ${xmlAttrs(attrs)} />`;
+}
+
+function compactScreenPhaseXmlLine(gameDataJson, exposure) {
+  const screenPhase = compactScreenPhase(gameDataJson, exposure);
+  return `  <screen_phase ${xmlAttrs({
+    phase: screenPhase.phase || "inspect_screenshot",
+    confidence: screenPhase.confidence || "unknown",
+    synchronized_ram_image: true,
+  })} />`;
+}
+
+function interactableXmlAttrs(entry, coordinateFrame) {
+  const point = coordinatePointForSurface(entry, coordinateFrame);
+  const attrs = {
+    kind: entry?.kind || "check",
+    x: point.x ?? "",
+    y: point.y ?? "",
+    local_x: point.localX ?? "",
+    local_y: point.localY ?? "",
+    coordinate_mode: entry?.coordinateMode || coordinateFrame.coordinateMode || "",
+    distance: entry?.distance ?? "",
+    required_facing: entry?.requiredFacing && entry.requiredFacing !== "unknown" ? entry.requiredFacing : "",
+    in_front_of_player: entry?.inFrontOfPlayer === true ? "true" : "",
+  };
+  if (Array.isArray(entry?.useFrom) && entry.useFrom.length > 0) {
+    attrs.use_from = entry.useFrom
+      .slice(0, 4)
+      .map((tile) => {
+        const usePoint = coordinatePointForSurface(tile, coordinateFrame);
+        const facing = tile?.requiredFacing || "unknown";
+        return `${usePoint.x ?? "?"},${usePoint.y ?? "?"},facing=${facing}`;
+      })
+      .join(";");
+  }
+  return attrs;
+}
+
+function compactVisibleInteractableXmlLines(gameDataJson, exposure) {
+  if (!shouldExposeDecodedField(exposure, "interactables") || !shouldExposeDecodedNavigation(exposure)) {
+    return ['  <visible_interactables shown="false" reason="not_exposed" />'];
+  }
+  const surface = validatedVisibleInteractableSurface(gameDataJson, exposure);
+  if (surface.validated !== true && !exposeAllDecodedRamForModel(exposure)) {
+    return ['  <visible_interactables shown="false" reason="not_validated" />'];
+  }
+  const coordinateFrame = playerCoordinateFrame(gameDataJson);
+  const decodedSurface = surface.validated === true ? surface : decodedVisibleInteractablesForModel(gameDataJson);
+  const entries = Array.isArray(decodedSurface.entries) ? decodedSurface.entries : [];
+  const lines = [
+    `  <visible_interactables ${xmlAttrs({
+      count: entries.length,
+      use_from_contract: "current_reachable_validated_standing_tiles_when_present",
+    })}>`,
+  ];
+  const current = decodedSurface.current;
+  if (current) {
+    lines.push(`    <current_interaction ${xmlAttrs(interactableXmlAttrs(current, coordinateFrame))} />`);
+  }
+  for (const entry of entries.slice(0, 8)) {
+    lines.push(`    <interactable ${xmlAttrs(interactableXmlAttrs(entry, coordinateFrame))} />`);
+  }
+  if (entries.length === 0) lines.push("    <none />");
+  lines.push("  </visible_interactables>");
+  return lines;
+}
+
 function compactProgressLines(gameDataJson, exposure) {
   const lines = [];
   const trainer = gameDataJson?.current_trainer_data || {};
@@ -3850,7 +4040,7 @@ function compactProgressLines(gameDataJson, exposure) {
     if (safeProgress.safari_zone_active === true && safeProgress.safari_zone_has_step_limit === false) {
       named.push("safari_zone_steps_remaining=none");
     }
-    if (named.length > 0) lines.push(`Progress flags: ${named.join(", ")}.`);
+    if (named.length > 0) lines.push(`Field/world state flags: ${named.join(", ")}.`);
   }
   return lines;
 }
@@ -3867,34 +4057,35 @@ function buildSimplePlayerPrompt() {
     "Do not inspect files, RAM dumps, emulator internals, repository code, runtime JSON, or monitor-only artifacts for gameplay decisions.",
     "Older self-authored reasoning may be available through the reasoning archive; recalled entries are your own prior player history, not route hints.",
     "Do not decide from truncated PowerShell output. Inspect only model_input.image, model_input.user_input_text, model_input.decoded_ram, recent reasoning/history, memory/objectives, and the action schema.",
-    "After POSTing an action with include_next_observation=1, inspect the returned next_observation screenshot before the next decision. If next_observation is missing, GET the next observation separately. Use a 90s POST timeout. If a GET observation times out, retry GET once. If a POST action times out, do not repeat the same input first; GET a fresh observation to see whether the input already happened.",
+    "After POSTing an action with include_next_observation=1, inspect the returned next_observation RAM+image surface before the next decision. If next_observation is missing, recover transport with a separate GET observation. Use a 90s POST timeout. If a GET observation times out, retry GET once. If a POST action times out, do not repeat the same input first; GET a fresh observation to see whether the input already happened.",
     "Transport silence: Do not narrate routine observation/action transport in the Codex conversation. Endpoint calls are only I/O; speak there only for meaningful gameplay expression, a decision you want to record, or an interface failure.",
     "Observation refresh is interface I/O, not an in-game objective. Mention it only when input is unavailable or stale enough that no safe gameplay action can be chosen.",
-    "In ram_assisted mode, decoded current RAM gameplay state shown in model_input.user_input_text and model_input.decoded_ram is part of your game observation. Use the current decoded state together with the screenshot.",
-    "Do not use a_until_end_of_dialog just because text is missing. Use it only when the official image/text clearly shows already-read low-information dialogue; if the official image cannot be viewed, stop and report an observation failure.",
+    "In ram_assisted mode, model_input.image, model_input.user_input_text, and model_input.decoded_ram are one synchronized RAM+image gameplay observation. Use them together as the current game state.",
+    "Do not classify normal gameplay uncertainty, failed guesses, or lack of a plan as a run blocker. Stop only for an explicit local interface blocker, harness error, or ok:false that prevents observation/input; otherwise keep playing from RAM+image and action results.",
+    "Do not ask for first-hand manual validation of every possible state. The RAM+image interface is expected to generalize through engine-level map, collision, object, text/menu/battle, and action-result primitives.",
     "Return exactly one execute_action arguments JSON object with an actions array. step_details, chat_message, and avatar_emotion may be included for meaningful gameplay expression using your own wording and amount of detail; routine endpoint transport needs no narration.",
-    "On the Pokemon HeartGold title screen or a visible 'Touch to Start' prompt, press Start first with key_press keys:[\"start\"]. Do not assume touch is required there.",
-    "Use DS buttons for dialogue/menus unless a lower touch-screen target is clearly faster. Touch coordinates are bottom-local 256x192 by default: x=0..255 and y=0..191, where y=0 is the top edge of the bottom screen. If you pick from the attached scaled image instead, use coordinate_space=\"model_scaled\", screen=\"full\", and source_width/source_height from model_input.image.",
+    "Use the execute_action schema for available controls and coordinate spaces. Touch coordinates are bottom-local 256x192 by default: x=0..255 and y=0..191, where y=0 is the top edge of the bottom screen. If you pick from the attached scaled image instead, use coordinate_space=\"model_scaled\", screen=\"full\", and source_width/source_height from model_input.image.",
   ].join("\n");
 }
 
 function buildSimplePlayerObservation(gameDataJson, imageContract, exposure) {
   const lines = [
-    `Step ${state.counters.currentStep}. Mode: ${exposure.mode || "ram_assisted"}.`,
-    `Current image: ${imageContract?.width || "?"}x${imageContract?.height || "?"}, scale ${imageContract?.scale || "?"}.`,
-    "Nintendo DS layout: top screen is above; bottom screen is touch-capable. The persistent MENU/CHECK lower panel is standby UI, not an opened menu by itself.",
+    `<game_state step="${escapeXml(state.counters.currentStep)}" mode="${escapeXml(exposure.mode || "ram_assisted")}" synchronized_ram_image="true">`,
+    `  <current_image width="${escapeXml(imageContract?.width || "?")}" height="${escapeXml(imageContract?.height || "?")}" scale="${escapeXml(imageContract?.scale || "?")}" />`,
+    '  <ds_layout top_screen="above_visual" bottom_screen="below_touchable" persistent_lower_panel="standby_ui_not_open_menu" />',
   ];
   const imageContractText = formatImageContract(imageContract);
   if (imageContractText) lines.unshift(imageContractText);
 
-  const screenPhase = compactScreenPhase(gameDataJson, exposure);
-  lines.push(`Current RAM screen: ${screenPhase.phase}. Use the screenshot for visible text, menus, and prompts.`);
+  lines.push(compactScreenPhaseXmlLine(gameDataJson, exposure));
+  lines.push(compactPlayerLocationXmlLine(gameDataJson, exposure));
+  lines.push(`  <ram_image_contract>The screenshot and decoded RAM describe the same emulator moment; use them together as one gameplay observation.</ram_image_contract>`);
   if (visualPromptWithoutRamText(gameDataJson)) {
-    lines.push("Visual prompt/dialogue is present, but RAM text is not validated. Decide from the current screenshot; overworld navigation/interactables may be background until the visible prompt is advanced or closed.");
+    lines.push('  <visible_prompt_in_image active="true" ram_text_decoded="false">Overworld navigation and interactables are background state until the prompt is advanced or closed.</visible_prompt_in_image>');
   }
 
   const visibleText = formatCurrentVisibleTextForPlayer(gameDataJson, exposure);
-  if (visibleText) lines.push(visibleText);
+  if (visibleText) lines.push(`  <visible_ram_text>\n${visibleText}\n  </visible_ram_text>`);
 
   lines.push(...compactNavigationLines(gameDataJson, exposure));
   lines.push(...compactMenuLines(gameDataJson, exposure));
@@ -3906,7 +4097,7 @@ function buildSimplePlayerObservation(gameDataJson, imageContract, exposure) {
   lines.push(...compactProgressLines(gameDataJson, exposure));
   lines.push(...compactRuntimeObjectLines(gameDataJson, exposure));
   lines.push(...compactWarpLines(gameDataJson, exposure));
-  lines.push(...compactVisibleInteractableLines(gameDataJson, exposure));
+  lines.push(...compactVisibleInteractableXmlLines(gameDataJson, exposure));
 
   const objectives = compactObjectives();
   if (objectives.length > 0) {
@@ -3920,7 +4111,8 @@ function buildSimplePlayerObservation(gameDataJson, imageContract, exposure) {
     for (const entry of memoryEntries) lines.push(`- ${entry.key}: ${entry.value}`);
   }
 
-  lines.push("Controls: key_press requires keys:[...] for one simultaneous press, button_sequence requires sequence:[{keys:[...]}] for ordered inputs, wait for animations, type_text on naming keyboards, touch only for clear lower-screen buttons. On title/'Touch to Start', use key_press keys:[\"start\"] first. Bottom touch coordinates are x=0..255,y=0..191.");
+  lines.push("Controls: key_press requires keys:[...] for one simultaneous press, button_sequence requires sequence:[{keys:[...]}] for ordered inputs, wait pauses, type_text enters text on naming keyboards, and touch uses bottom-screen coordinates x=0..255,y=0..191 by default.");
+  lines.push("</game_state>");
   return sanitizeCurrentPromptText(lines.join("\n"));
 }
 
@@ -3957,7 +4149,7 @@ function modelSurfaceSummaryForPlayer(summary) {
     playerSummary.monitor_only = true;
     playerSummary.configured_observation_mode = summary.configured_observation_mode;
     playerSummary.bridge_observation_mode = summary.bridge_observation_mode;
-    playerSummary.degraded_visual_fallback = summary.degraded_visual_fallback;
+    playerSummary.harness_observation_failure = summary.harness_observation_failure === true;
   }
   return playerSummary;
 }
@@ -4043,7 +4235,7 @@ async function buildCodexDesktopObservation({ includeDiagnostics = false, anchor
     : buildSimplePlayerObservation(gameDataJson, imageContract, exposure);
   if (!includeDiagnostics && degradedVisualFallback) {
     userInputText =
-      `Bridge note: structured RAM/game-state data is temporarily unavailable for this turn, so this observation is running in visual-only degraded mode. The screenshot may be the last captured bridge frame rather than a fresh RAM-synced frame. Decide from the visible screenshot first and use conservative visible-screen inputs until structured observation returns.\n` +
+      `Harness observation failure: the server did not return a complete RAM+image gameplay observation for this turn. This is not benchmark-comparable and must not be treated as normal gameplay.\n` +
       userInputText;
   }
   const decodedRam = includeDiagnostics ? null : buildModelDecodedRam(gameDataJson, exposure);
@@ -4124,7 +4316,7 @@ async function buildCodexDesktopObservation({ includeDiagnostics = false, anchor
       bridge_observation_mode: gameDataJson?.observationPolicy?.mode || gameDataJson?.game?.observationMode || null,
       model_image_scale: Number(modelImage?.scale || config.observation.modelImageScale) || null,
       observation_anchor_restore: includeDiagnostics !== true && anchor !== false && anchorState?.enabled === true,
-      degraded_visual_fallback: degradedVisualFallback,
+      harness_observation_failure: degradedVisualFallback,
     },
     harness_diagnostics: includeDiagnostics
       ? {
@@ -4441,6 +4633,37 @@ function xmlUnescape(value) {
     .replace(/&amp;/g, "&");
 }
 
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function parseXmlAttributes(attrsText) {
+  const attrs = {};
+  const text = String(attrsText || "");
+  for (const match of text.matchAll(/\b([A-Za-z_][A-Za-z0-9_:-]*)="([^"]*)"/g)) {
+    attrs[match[1]] = xmlUnescape(match[2]);
+  }
+  return attrs;
+}
+
+function extractXmlElementText(inner, tagName) {
+  const match = String(inner || "").match(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)(?:<\\/${tagName}>|$)`, "i"));
+  return match ? xmlUnescape(match[1]) : "";
+}
+
+function compactActionDetailsForPlayer(details) {
+  const safe = sanitizeModelText(xmlUnescape(details || "")).trim();
+  if (!safe) return "";
+  const maxChars = 4000;
+  if (safe.length <= maxChars) return safe;
+  return `${safe.slice(0, maxChars).trimEnd()}\n- detailsTruncated: true`;
+}
+
 function toolResultText(toolResult) {
   const output = toolResult?.output;
   if (typeof output === "string") return output;
@@ -4458,12 +4681,35 @@ function toolResultText(toolResult) {
 
 function simplifyActionResultForPlayer(text) {
   const original = String(text || "");
-  const playerNextStep = "Use the next observation screenshot and visible game state to decide what happened.";
+  const allowedAttrs = [
+    "type",
+    "semantic_success",
+    "raw_success",
+    "success",
+    "input_delivered",
+    "visible_effect",
+    "semantic_target_verified",
+    "semantic_outcome",
+    "benchmark_verified",
+  ];
   const simplified = original.replace(
-    /<action_result\b[^>]*\btype="([^"]*)"[^>]*>[\s\S]*?<\/action_result>/gi,
-    (block, actionType) => {
-      const safeType = sanitizeModelText(actionType || "action");
-      return `<action_result type="${safeType}"><next_step>${playerNextStep}</next_step></action_result>`;
+    /<action_result\b([^>]*)>([\s\S]*?)<\/action_result>/gi,
+    (block, attrsText, inner) => {
+      const attrs = parseXmlAttributes(attrsText);
+      if (!attrs.type) attrs.type = "action";
+      const attrText = allowedAttrs
+        .filter((name) => attrs[name] != null)
+        .map((name) => `${name}="${xmlEscape(sanitizeModelText(attrs[name]))}"`)
+        .join(" ");
+      const message = sanitizeModelText(extractXmlElementText(inner, "message")).trim();
+      const details = compactActionDetailsForPlayer(extractXmlElementText(inner, "details"));
+      const body = [];
+      if (message) body.push(`<message>${xmlEscape(message)}</message>`);
+      if (details) body.push(`<details>${xmlEscape(details)}</details>`);
+      if (body.length === 0) {
+        body.push("<message>Action result was returned without additional engine details.</message>");
+      }
+      return `<action_result ${attrText}>${body.join("\n")}</action_result>`;
     }
   );
   if (simplified !== original || !/<action_result\b/i.test(simplified)) return simplified;
@@ -4472,7 +4718,7 @@ function simplifyActionResultForPlayer(text) {
   const safeType = sanitizeModelText(actionType);
   const safeMessage = sanitizeModelText(xmlUnescape(messageMatch?.[1] || ""));
   const message = safeMessage ? `<message>${safeMessage}</message>` : "";
-  return `<action_result type="${safeType}">${message}<next_step>${playerNextStep}</next_step></action_result>`;
+  return `<action_result type="${xmlEscape(safeType)}">${message}</action_result>`;
 }
 
 function sanitizeToolResultForDesktop(toolResult) {
@@ -4512,6 +4758,7 @@ function analyzeToolResult(toolResult) {
       visible_effect: attrValue("visible_effect"),
       semantic_target_verified: attrValue("semantic_target_verified"),
       semantic_outcome: attrValue("semantic_outcome"),
+      benchmark_verified: attrValue("benchmark_verified"),
     };
   });
   if (actionMatches.length > 0) {
@@ -4537,19 +4784,9 @@ function analyzeToolResult(toolResult) {
     });
     const modelVisibleInputSuccess = (item) => {
       if (semanticSuccess(item)) return true;
-      const type = String(item.type || "").toLowerCase();
       const inputDelivered = String(item.input_delivered || "").toLowerCase() === "true";
-      const visibleEffect = String(item.visible_effect || "").toLowerCase() === "true";
-      const semanticTarget = String(item.semantic_target_verified || "").toLowerCase();
-      const outcome = String(item.semantic_outcome || "").toLowerCase();
       if (!inputDelivered || hardFailure === item) return false;
-      if (semanticTarget === "false" && !(type === "touch" && visibleEffect)) return false;
-      if (type === "touch" && semanticTarget !== "false") return true;
-      if (outcome === "low_stall_input_delivered") return true;
-      return (
-        ["key_press", "button_sequence", "a_until_end_of_dialog", "touch"].includes(type) &&
-        (visibleEffect || outcome === "visible_effect")
-      );
+      return true;
     };
     const allBenchmarkSemanticSuccess = actionSemantics.every(semanticSuccess);
     const inputFailure = actionSemantics.find((item) => !modelVisibleInputSuccess(item));
@@ -4966,8 +5203,10 @@ module.exports = {
   executeCodexDesktopAction,
   _private: {
     analyzeToolResult,
+    buildModelDecodedRam,
     buildModelVisibleManifest,
     buildSimplePlayerObservation,
+    sanitizeToolResultForDesktop,
     validateDesktopTouchActions,
   },
 };
